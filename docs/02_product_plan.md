@@ -32,7 +32,7 @@ Tax research, legal research, accounting standards research, automated audit exe
 
 ## Success Metrics
 
-AuditLens will be considered successful if it can:
+AuditAtlas will be considered successful if it can:
 
 - Retrieve relevant information from trusted sources
 - Provide citation-supported answers
