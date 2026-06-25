@@ -12,10 +12,10 @@ The initial MVP focuses on:
 
 ## Project Roadmap
 
-| Phase | Description | Issue |
+| Phase | Description | Status |
 |---|---|---|
-| 1 | Project Definition — scope, objectives, users, success criteria | #2 |
-| 2 | Knowledge Source Selection — evaluate standards, SEC filings, company document sources | #3 |
+| 1 | Project Definition — scope, objectives, users, success criteria | ✅ Complete |
+| 2 | Knowledge Source Selection — evaluate and acquire standards, SEC filings, company document sources | ✅ Complete |
 | 3 | Knowledge Engineering — document structures, metadata models, citation strategy | #4 |
 | 4 | Data Ingestion — document collection, parsing, and processing pipelines | #5 |
 | 5 | Retrieval System — search and retrieval across all knowledge sources | #6 |
