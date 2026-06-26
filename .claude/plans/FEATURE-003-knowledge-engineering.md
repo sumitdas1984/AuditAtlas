@@ -2,7 +2,7 @@
 
 **Issue**: https://github.com/sumitdas1984/AuditAtlas/issues/4
 **Phase**: 3
-**Status**: In Progress — TASK-1 ✅ Complete
+**Status**: In Progress — TASK-1 ✅ TASK-2 ✅
 
 ## Phase Folder Structure
 
