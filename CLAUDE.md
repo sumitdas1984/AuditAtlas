@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AuditAtlas is an AI-powered Audit Research Assistant for audit professionals. The system combines retrieval, reasoning, and source attribution to provide evidence-backed answers with traceable citations.
 
-**Current status**: Early-stage — documentation and data acquisition complete (Phases 1–2), actively working on Phase 3 (Knowledge Engineering).
+**Current status**: Phase 3 (Knowledge Engineering) complete. Ready for Phase 4 (Data Ingestion).
 
 ## Branch Strategy
 
@@ -18,10 +18,13 @@ AuditAtlas is an AI-powered Audit Research Assistant for audit professionals. Th
 
 Project uses GitHub issues for tracking: `sumitdas1984/AuditAtlas`
 
-Active issues:
+Completed:
 - #3 (Knowledge Source Selection) — ✅ Closed
-- #4 (Knowledge Engineering) — Phase 3, in progress
-- #5–#9 — Future phases
+- #4 (Knowledge Engineering) — ✅ Phase 3 complete
+
+Next:
+- #5 (Data Ingestion) — Phase 4
+- #6–#9 — Future phases
 
 ## Synthetic Document Generation
 
@@ -49,6 +52,7 @@ data/
 | `docs/03_project_plan.md` | Phase roadmap and status |
 | `docs/04_knowledge_sources.md` | Source definitions, scope, acquisition status |
 | `docs/knowledge_engineering/` | Phase 3 outputs — schema, chunking, citation, routing |
+| `src/knowledge_engineering/` | Phase 3 code — schemas, models, router, citation |
 | `docs/02_product_plan.md` | Target users, core features, success metrics |
 | `docs/01_project_overview.md` | Project vision and problem statement |
 | `.claude/commands/synthetic-audit-doc-gen.md` | Slash command definition |
