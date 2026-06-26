@@ -1,0 +1,50 @@
+# PCAOB Standards Schema
+# Maps to: docs/knowledge_engineering/05_schema_design.md
+
+fields:
+  - name: standard_id
+    type: string
+    example: "AS 1105"
+    description: "PCAOB standard identifier (AS/QC/EI prefix + number)"
+
+  - name: title
+    type: string
+    example: "Audit Evidence"
+    description: "Full title of the standard or guidance"
+
+  - name: document_type
+    type: enum
+    enum_values:
+      - RulemakingRelease
+      - Standard
+      - StaffGuidance
+      - SECForm
+    description: "Type of PCAOB document"
+
+  - name: issue_date
+    type: date
+    example: "2024-05-13"
+    description: "Date the document was issued"
+
+  - name: effective_date
+    type: date
+    example: "2024-12-15"
+    description: "Effective date for compliance"
+
+  - name: status
+    type: enum
+    enum_values:
+      - Effective
+      - Proposed
+      - Delayed
+    description: "Current status of the standard"
+
+  - name: source_url
+    type: string
+    example: "https://pcaobus.org/oversight/standards/auditing-standards"
+    description: "URL to the authoritative source"
+
+  - name: file_path
+    type: string
+    example: "data/pcaob_standards/AS1105.pdf"
+    description: "Local path to the document file"

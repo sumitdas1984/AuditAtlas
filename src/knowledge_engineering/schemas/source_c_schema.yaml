@@ -1,0 +1,55 @@
+# Synthetic Documents Schema
+# Maps to: docs/knowledge_engineering/05_schema_design.md
+
+fields:
+  - name: document_id
+    type: string
+    example: "IA-2026-004"
+    description: "Unique document identifier"
+
+  - name: document_type
+    type: enum
+    enum_values:
+      - InternalAuditReport
+      - ControlMatrix
+      - RiskRegister
+      - Policy
+      - SOP
+    description: "Type of synthetic document"
+
+  - name: version
+    type: string
+    example: "3.2"
+    description: "Document version"
+
+  - name: effective_date
+    type: date
+    example: "2026-01-15"
+    description: "Date the document becomes effective"
+
+  - name: review_date
+    type: date
+    example: "2027-01-15"
+    description: "Scheduled review date"
+
+  - name: classification
+    type: enum
+    enum_values:
+      - InternalUseOnly
+      - InternalConfidential
+    description: "Document classification level"
+
+  - name: owner
+    type: string
+    example: "Margaret Thornton"
+    description: "Document owner name"
+
+  - name: company
+    type: string
+    constant: "Northwind Retail Solutions Ltd."
+    description: "Company name (always Northwind Retail Solutions Ltd.)"
+
+  - name: file_path
+    type: string
+    example: "data/synthetic_company_docs/01-Internal-Audit-Report.md"
+    description: "Local path to the document file"

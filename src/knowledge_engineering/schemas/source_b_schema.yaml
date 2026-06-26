@@ -1,0 +1,38 @@
+# SEC 10-K Filing Schema
+# Maps to: docs/knowledge_engineering/05_schema_design.md
+
+fields:
+  - name: company_name
+    type: string
+    example: "Apple Inc."
+    description: "Full legal company name"
+
+  - name: ticker
+    type: string
+    example: "AAPL"
+    description: "SEC ticker symbol (uppercase)"
+
+  - name: filing_date
+    type: date
+    example: "2025-10-25"
+    description: "Date the 10-K was filed with SEC"
+
+  - name: fiscal_year
+    type: integer
+    example: 2025
+    description: "Fiscal year covered by the filing"
+
+  - name: sections_present
+    type: list[string]
+    example: ["Item 1A", "Item 7", "Item 8", "Item 9A"]
+    description: "List of SEC Items present in the filing"
+
+  - name: source_url
+    type: string
+    example: "https://www.sec.gov/archives/edgar/data/320193/000032019325000123/aapl10k.htm"
+    description: "URL to SEC EDGAR filing"
+
+  - name: file_path
+    type: string
+    example: "data/sec_10k/AAPL_2025_10K.pdf"
+    description: "Local path to the filing file"
