@@ -34,5 +34,5 @@ fields:
 
   - name: file_path
     type: string
-    example: "data/sec_10k/AAPL_2025_10K.pdf"
+    example: "data/raw/sec_10k/AAPL_2025_10K.pdf"
     description: "Local path to the filing file"

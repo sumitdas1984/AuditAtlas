@@ -54,7 +54,7 @@
 
 **Out of Scope**: Real company confidential documents, non-synthetic data.
 
-**Data Acquisition**: Generated using Claude Code agent (`synthetic-audit-doc-gen`) with a fictional company "Northwind Retail Solutions Ltd." as the subject. Documents stored in `data/synthetic_company_docs/`.
+**Data Acquisition**: Generated using Claude Code agent (`synthetic-audit-doc-gen`) with a fictional company "Northwind Retail Solutions Ltd." as the subject. Documents stored in `data/raw/synthetic_company_docs/`.
 
 ---
 

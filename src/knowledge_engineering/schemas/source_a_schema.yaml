@@ -46,5 +46,5 @@ fields:
 
   - name: file_path
     type: string
-    example: "data/pcaob_standards/AS1105.pdf"
+    example: "data/raw/pcaob_standards/AS1105.pdf"
     description: "Local path to the document file"

@@ -346,7 +346,7 @@ python -m src.ingestion run --source A
 python -m src.ingestion run --source B
 
 # Ingest single document
-python -m src.ingestion run --file data/synthetic_company_docs/01-Internal-Audit-Report.md
+python -m src.ingestion run --file data/raw/synthetic_company_docs/01-Internal-Audit-Report.md
 ```
 
 ### Retrieval (Phase 5)
