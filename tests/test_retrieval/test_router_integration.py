@@ -10,6 +10,8 @@ Verifies that:
 
 from pathlib import Path
 
+import pytest
+
 from src.ingestion.embedder.embedder import Embedder
 from src.knowledge_engineering.router import Router
 from src.retrieval import Retriever, SearchResult
@@ -456,3 +458,67 @@ class TestSearchEmptyRoutingFallback:
         # Fell through to single-search — got results, no routing populated
         assert result.routing is None
         assert len(result.chunks) > 0
+
+    def test_router_route_exception_propagates(self, populated_stores, monkeypatch):
+        """If Router.route() raises, the exception propagates (MVP-safe default).
+
+        Rationale: a router failure usually indicates a bug or environmental
+        issue — silently falling back to single-search could give the user
+        misleading partial results. Better to fail loudly and let the caller
+        decide whether to retry or surface the error.
+        """
+        chroma, json_store, _ = populated_stores
+        router = Router()
+
+        def exploding_route(query, classifier=None):
+            raise RuntimeError("router boom")
+
+        monkeypatch.setattr(router, "route", exploding_route)
+
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder(), router=router
+        )
+        with pytest.raises(RuntimeError, match="router boom"):
+            retriever.search("audit evidence")
+
+
+class TestBypassConsistencyWithBuildWhereClause:
+    """Verify has_explicit_filter matches _build_where_clause truthy semantics.
+
+    `where={}`, `ticker=""`, `standard_id=""` should NOT trigger bypass —
+    they would be silently ignored by _build_where_clause anyway, so routing
+    should still run.
+    """
+
+    def test_empty_where_dict_does_not_bypass_router(self, populated_stores):
+        chroma, json_store, _ = populated_stores
+        router = Router()
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder(), router=router
+        )
+        result = retriever.search("audit evidence", where={})
+
+        # Routing should have run (routing is populated)
+        assert result.routing is not None
+
+    def test_empty_string_ticker_does_not_bypass_router(self, populated_stores):
+        chroma, json_store, _ = populated_stores
+        router = Router()
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder(), router=router
+        )
+        result = retriever.search("audit evidence", ticker="")
+
+        # Routing should have run
+        assert result.routing is not None
+
+    def test_empty_string_standard_id_does_not_bypass_router(self, populated_stores):
+        chroma, json_store, _ = populated_stores
+        router = Router()
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder(), router=router
+        )
+        result = retriever.search("audit evidence", standard_id="")
+
+        # Routing should have run
+        assert result.routing is not None

@@ -4,6 +4,7 @@ Single-source and multi-source (router-driven) search with structured
 SearchResult output. CLI integration comes in TASK-5-4.
 """
 
+import logging
 from typing import Optional
 
 from ..ingestion.embedder.embedder import Embedder
@@ -12,6 +13,8 @@ from ..ingestion.storage.json_store import JsonStore
 from ..knowledge_engineering.citation import SourceType, format_citation
 from ..knowledge_engineering.router import Router, RoutingResult
 from .models import RetrievedChunk, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 class Retriever:
@@ -81,9 +84,18 @@ class Retriever:
         # Intentional design: explicit filters bypass routing because the caller
         # has scoped the search — re-routing could narrow results the caller
         # explicitly wanted. Pass use_router=False to force single-search mode.
-        has_explicit_filter = (
-            where is not None or bool(ticker) or bool(standard_id)
-        )
+        #
+        # Bypass-detection uses TRUTHY checks (not `is not None`) so it matches
+        # `_build_where_clause()` semantics: empty values (`where={}`,
+        # `ticker=""`, `standard_id=""`) are treated as no-filter and do NOT
+        # trigger bypass — they would be silently ignored downstream anyway.
+        has_explicit_filter = bool(where) or bool(ticker) or bool(standard_id)
+        if use_router and self.router is not None and has_explicit_filter:
+            logger.debug(
+                "Bypassing router due to explicit filter "
+                "(where=%r, ticker=%r, standard_id=%r)",
+                where, ticker, standard_id,
+            )
         should_route = (
             use_router and self.router is not None and not has_explicit_filter
         )
