@@ -41,6 +41,8 @@ class Retriever:
         query: str,
         top_k: int = 5,
         where: Optional[dict] = None,
+        ticker: Optional[str] = None,
+        standard_id: Optional[str] = None,
     ) -> SearchResult:
         """Search the knowledge base for chunks relevant to the query.
 
@@ -48,6 +50,9 @@ class Retriever:
             query: Natural-language query string.
             top_k: Maximum number of chunks to return.
             where: Optional ChromaDB metadata filter (e.g., {"source_type": "A"}).
+                Combined with `ticker` / `standard_id` if those are also set.
+            ticker: Optional Source B ticker filter (e.g., "AAPL").
+            standard_id: Optional Source A standard ID filter (e.g., "AS1105").
 
         Returns:
             SearchResult with chunks ordered by ChromaDB distance (ascending).
@@ -55,12 +60,15 @@ class Retriever:
         if not query or not query.strip():
             return SearchResult(query=query, chunks=[])
 
+        # Build merged where clause from raw `where` plus convenience kwargs
+        merged_where = self._build_where_clause(where, ticker, standard_id)
+
         # Step 1+2: vector search via ChromaDB
         raw_results = self.chroma_store.search(
             query_text=query,
             embedder=self.embedder,
             n_results=top_k,
-            where=where,
+            where=merged_where,
         )
 
         # ChromaDB returns a dict like:
@@ -109,5 +117,51 @@ class Retriever:
         return SearchResult(
             query=query,
             chunks=chunks,
-            sources_searched=[where["source_type"]] if where and "source_type" in where else [],
+            sources_searched=self._infer_sources_searched(merged_where, ticker, standard_id),
         )
+
+    @staticmethod
+    def _infer_sources_searched(
+        where: Optional[dict],
+        ticker: Optional[str],
+        standard_id: Optional[str],
+    ) -> list[str]:
+        """Derive the list of source types filtered to, based on the active filters.
+
+        Used to populate `SearchResult.sources_searched` for caller visibility
+        into which source(s) the search was scoped to.
+        """
+        sources: set[str] = set()
+        if where and "source_type" in where:
+            sources.add(str(where["source_type"]))
+        if ticker is not None:
+            sources.add("B")  # ticker is a Source B field
+        if standard_id is not None:
+            sources.add("A")  # standard_id is a Source A field
+        return sorted(sources)
+
+    @staticmethod
+    def _build_where_clause(
+        where: Optional[dict],
+        ticker: Optional[str],
+        standard_id: Optional[str],
+    ) -> Optional[dict]:
+        """Build a ChromaDB-compatible where clause from caller filters.
+
+        ChromaDB requires a single top-level operator (`field=value`,
+        `$and=[...]`, `$or=[...]`). When multiple filters are supplied, we
+        combine them with `$and` so callers don't have to.
+        """
+        conditions: list[dict] = []
+        if where:
+            conditions.append(dict(where))
+        if ticker is not None:
+            conditions.append({"ticker": ticker})
+        if standard_id is not None:
+            conditions.append({"standard_id": standard_id})
+
+        if not conditions:
+            return None
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}

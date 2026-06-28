@@ -229,3 +229,66 @@ class TestRetriever:
         assert chunk.chunk_id == "X.1"
         assert chunk.distance == 0.5
         assert chunk.metadata == {"k": "v"}
+
+    def test_search_filter_by_ticker(self, populated_stores):
+        """ticker='AAPL' returns only Source B chunks tagged with AAPL."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(chroma_store=chroma, json_store=json_store)
+        result = retriever.search("risk", ticker="AAPL", top_k=10)
+
+        assert len(result.chunks) > 0
+        for chunk in result.chunks:
+            assert chunk.source_type == "B"
+            assert chunk.metadata.get("ticker") == "AAPL"
+        assert "B" in result.sources_searched
+
+    def test_search_filter_by_standard_id(self, populated_stores):
+        """standard_id='AS1105' returns only the AS1105 chunk."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(chroma_store=chroma, json_store=json_store)
+        result = retriever.search("audit evidence", standard_id="AS1105", top_k=10)
+
+        assert len(result.chunks) > 0
+        for chunk in result.chunks:
+            assert chunk.source_type == "A"
+            assert chunk.metadata.get("standard_id") == "AS1105"
+        assert "A" in result.sources_searched
+
+    def test_search_filter_combined_with_where(self, populated_stores):
+        """Combining where={source_type: A} + standard_id='AS1105' narrows to AS1105 only."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(chroma_store=chroma, json_store=json_store)
+        result = retriever.search(
+            "audit risk",
+            where={"source_type": "A"},
+            standard_id="AS1105",
+            top_k=10,
+        )
+
+        # Should match AS1105.12 only (not AS2110.5)
+        assert len(result.chunks) > 0
+        for chunk in result.chunks:
+            assert chunk.source_type == "A"
+            assert chunk.metadata.get("standard_id") == "AS1105"
+
+    def test_search_filter_no_match(self, populated_stores):
+        """ticker='XYZ' (unknown) returns empty SearchResult without raising."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(chroma_store=chroma, json_store=json_store)
+        result = retriever.search("anything", ticker="XYZ")
+
+        assert isinstance(result, SearchResult)
+        assert result.chunks == []
+        assert "B" in result.sources_searched  # filter was applied, just no matches
+
+    def test_search_filter_kwarg_only(self, populated_stores):
+        """standard_id kwarg alone (no explicit where) translates to where-clause and works."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(chroma_store=chroma, json_store=json_store)
+        # AS2110 chunk is in the fixture
+        result = retriever.search("risk", standard_id="AS2110", top_k=10)
+
+        assert len(result.chunks) > 0
+        for chunk in result.chunks:
+            assert chunk.metadata.get("standard_id") == "AS2110"
+        assert "A" in result.sources_searched

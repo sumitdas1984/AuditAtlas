@@ -170,3 +170,75 @@ class TestSqliteIndex:
         """Test querying a source with no chunks."""
         results = temp_db.query_by_source("Z")
         assert len(results) == 0
+
+    def test_insert_and_query_by_ticker(self, temp_db, sample_chunk):
+        """Insert chunks with tickers and verify query_by_ticker returns the right ones."""
+        aapl_chunk = Chunk(
+            chunk_id="AAPL.2025.Item1A.1",
+            source_type="B",
+            document_id="AAPL",
+            document_type="10-K",
+            chunk_index=1,
+            content="Apple risk factors.",
+            metadata={"ticker": "AAPL", "fiscal_year": "2025", "item": "Item 1A"},
+            citation={"format": "[AAPL 10-K, Item 1A (2025)]", "type": "sec"},
+        )
+        msft_chunk = Chunk(
+            chunk_id="MSFT.2025.Item1A.1",
+            source_type="B",
+            document_id="MSFT",
+            document_type="10-K",
+            chunk_index=1,
+            content="Microsoft risk factors.",
+            metadata={"ticker": "MSFT", "fiscal_year": "2025", "item": "Item 1A"},
+            citation={"format": "[MSFT 10-K, Item 1A (2025)]", "type": "sec"},
+        )
+        temp_db.insert_batch([sample_chunk, aapl_chunk, msft_chunk])
+
+        aapl_results = temp_db.query_by_ticker("AAPL")
+        assert aapl_results == ["AAPL.2025.Item1A.1"]
+
+        msft_results = temp_db.query_by_ticker("MSFT")
+        assert msft_results == ["MSFT.2025.Item1A.1"]
+
+    def test_insert_and_query_by_standard_id(self, temp_db, sample_chunk):
+        """Insert chunks with standard_ids and verify query_by_standard_id returns the right ones."""
+        as1105_chunk = Chunk(
+            chunk_id="AS1105.12",
+            source_type="A",
+            document_id="AS1105",
+            document_type="Standard",
+            chunk_index=12,
+            content="Audit evidence paragraph.",
+            metadata={"paragraph": ".12", "standard_id": "AS1105"},
+            citation={"format": "[AS 1105 § .12]", "type": "pcaob"},
+        )
+        as2110_chunk = Chunk(
+            chunk_id="AS2110.5",
+            source_type="A",
+            document_id="AS2110",
+            document_type="Standard",
+            chunk_index=5,
+            content="Risk assessment paragraph.",
+            metadata={"paragraph": ".5", "standard_id": "AS2110"},
+            citation={"format": "[AS 2110 § .5]", "type": "pcaob"},
+        )
+        temp_db.insert_batch([sample_chunk, as1105_chunk, as2110_chunk])
+
+        as1105_results = temp_db.query_by_standard_id("AS1105")
+        assert as1105_results == ["AS1105.12"]
+
+        as2110_results = temp_db.query_by_standard_id("AS2110")
+        assert as2110_results == ["AS2110.5"]
+
+    def test_query_by_ticker_no_match(self, temp_db, sample_chunk):
+        """query_by_ticker for an unknown ticker returns an empty list."""
+        temp_db.insert(sample_chunk)
+        results = temp_db.query_by_ticker("XYZ")
+        assert results == []
+
+    def test_query_by_standard_id_no_match(self, temp_db, sample_chunk):
+        """query_by_standard_id for an unknown standard returns an empty list."""
+        temp_db.insert(sample_chunk)
+        results = temp_db.query_by_standard_id("AS9999")
+        assert results == []
