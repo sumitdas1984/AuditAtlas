@@ -53,14 +53,29 @@ data/
 | `docs/04_knowledge_sources.md` | Source definitions, scope, acquisition status |
 | `docs/knowledge_engineering/` | Phase 3 outputs — schema, chunking, citation, routing |
 | `src/knowledge_engineering/` | Phase 3 code — schemas, models, router, citation |
+| `docs/data_ingestion/` | Phase 4 ingestion design documents |
+| `src/ingestion/` | Phase 4 ingestion pipeline code |
 | `docs/02_product_plan.md` | Target users, core features, success metrics |
 | `docs/01_project_overview.md` | Project vision and problem statement |
-| `.claude/commands/synthetic-audit-doc-gen.md` | Slash command definition |
-| `.claude/agents/synthetic-audit-doc-gen.md` | Agent prompt template |
+| `.claude/commands/` | Slash command definitions |
+| `.claude/agents/` | Agent prompt templates |
 
 ## Slash Commands
 
 - `/synthetic-audit-doc-gen` — Generate synthetic audit documents for Source C
+- `/unit-test` — Analyze code changes and add missing unit tests (run after implementing)
+- `/doc-sync` — Sync documentation with code changes (run after `/unit-test`)
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `pydantic` | Data validation |
+| `pytest` | Testing |
+| `chromadb` | Vector database |
+| `sentence-transformers` | Embedding model (all-MiniLM-L6-v2) |
+| `python-frontmatter` | Markdown frontmatter parsing |
+| `pypdf` | PDF text extraction |
 
 ## When Creating New Features
 
