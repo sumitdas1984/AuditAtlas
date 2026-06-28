@@ -27,9 +27,13 @@ Completed:
 - #26 (TASK-5-2 Metadata Filtering) — ✅ Closed
 - #27 (TASK-5-3 Router Integration) — ✅ Closed
 - #28 (TASK-5-4 CLI, Integration Tests, Docs) — ✅ Closed
+- #33 (TASK-6-1 LLM Client & Answer Generator) — ✅ Closed
+
+In progress:
+- #7 (Agentic Research Workflow) — Phase 6 (TASK-6-2, 6-3 remaining)
 
 Future:
-- #7–#9 — Phases 6–8
+- #8–#9 — Phases 7–8
 
 ## Synthetic Document Generation
 
