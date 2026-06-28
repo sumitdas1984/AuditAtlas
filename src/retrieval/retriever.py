@@ -157,6 +157,12 @@ class Retriever:
         Rationale: a literal `{"ticker": ""}` would match no real chunks and
         almost always indicates a caller bug, so we silently ignore it.
         Empty `where={}` is also skipped.
+
+        # TODO(FEATURE-005): Add `classification=` kwarg for Source C filtering.
+        # Currently deferred — `classification` is not in ChromaDB metadata
+        # (only in chunk.metadata / JSON store), so it would need a SQLite
+        # pre-filter pass that returns matching chunk_ids to feed into a
+        # ChromaDB `$in` clause. Revisit if a use case demands it.
         """
         conditions: list[dict] = []
         if where:

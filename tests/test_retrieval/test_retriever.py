@@ -390,6 +390,23 @@ class TestRetrieverHelpers:
         result = Retriever._build_where_clause({"source_type": "A"}, "", None)
         assert result == {"source_type": "A"}
 
+    def test_build_where_clause_passes_through_special_chars(self):
+        """Filter values with quotes or $ chars are passed through unchanged.
+
+        The helper builds a Python dict (not a SQL string), so there's no
+        injection risk and no escaping is needed. ChromaDB receives the
+        literal value and handles matching itself.
+        """
+        result = Retriever._build_where_clause(
+            None, 'AAPL"$special', "AS\"1105"
+        )
+        assert result == {
+            "$and": [
+                {"ticker": 'AAPL"$special'},
+                {"standard_id": 'AS"1105'},
+            ]
+        }
+
     def test_infer_sources_searched_empty_string_ticker_not_counted(self):
         """Empty-string ticker doesn't imply Source B (no actual filter applied)."""
         result = Retriever._infer_sources_searched(None, "", None)
