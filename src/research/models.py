@@ -1,6 +1,7 @@
 """Data models for the research (answer generation) layer."""
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 from ..retrieval.models import RetrievedChunk
 
@@ -40,4 +41,28 @@ class CitedAnswer:
     usage: dict = field(default_factory=dict)
 
 
-__all__ = ["Citation", "CitedAnswer"]
+@dataclass
+class ResearchResult:
+    """The outcome of a complete research workflow run.
+
+    Bundles the LLM-generated answer with the retrieved chunks, the routing
+    decision (if any), the sources searched, and the wall-clock latency.
+
+    Attributes:
+        query: The original user query.
+        answer: The LLM-generated CitedAnswer.
+        chunks: The retrieved chunks (mirrors what's in answer.citations).
+        routing: The RoutingResult if the Router was used, else None.
+        sources_searched: List of source types queried (e.g., ["A", "B", "C"]).
+        latency_ms: Wall-clock time for the full workflow run, in milliseconds.
+    """
+
+    query: str
+    answer: CitedAnswer
+    chunks: list[RetrievedChunk] = field(default_factory=list)
+    routing: Optional[object] = None  # RoutingResult; avoid import cycle
+    sources_searched: list[str] = field(default_factory=list)
+    latency_ms: float = 0.0
+
+
+__all__ = ["Citation", "CitedAnswer", "ResearchResult"]
