@@ -36,13 +36,27 @@ logger = logging.getLogger(__name__)
 CONTENT_PREVIEW_CHARS = 200
 
 
+def _sanitize_for_table(s: str) -> str:
+    """Replace whitespace characters that would break table column alignment.
+
+    Newlines, tabs, and carriage returns are replaced with single spaces, and
+    consecutive spaces are collapsed. Returns "" for None input (defensive).
+    """
+    if s is None:
+        return ""
+    # Replace any run of whitespace (including \n, \t, \r) with a single space
+    return " ".join(str(s).split())
+
+
 def _content_preview(content: str, show_content: bool) -> str:
     """Return a content snippet (or empty string if hidden)."""
     if not show_content:
         return ""
+    if content is None:
+        return ""
     if len(content) <= CONTENT_PREVIEW_CHARS:
-        return content
-    return content[:CONTENT_PREVIEW_CHARS - 3] + "..."
+        return _sanitize_for_table(content)
+    return _sanitize_for_table(content[:CONTENT_PREVIEW_CHARS - 3]) + "..."
 
 
 def _format_table(result, show_content: bool = True) -> str:
@@ -53,10 +67,10 @@ def _format_table(result, show_content: bool = True) -> str:
     rows = []
     for chunk in result.chunks:
         rows.append({
-            "chunk_id": chunk.chunk_id,
-            "source_type": chunk.source_type,
+            "chunk_id": _sanitize_for_table(chunk.chunk_id),
+            "source_type": _sanitize_for_table(chunk.source_type),
             "distance": f"{chunk.distance:.4f}",
-            "citation": chunk.citation,
+            "citation": _sanitize_for_table(chunk.citation),
             "content": _content_preview(chunk.content, show_content),
         })
 
@@ -125,7 +139,7 @@ def _format_json(result) -> str:
             "confidence": result.routing.confidence,
             "reasoning": result.routing.reasoning,
         }
-    return json.dumps(payload, indent=2, default=str)
+    return json.dumps(payload, indent=2, default=str, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +288,12 @@ def main(argv: list[str] | None = None) -> int:
     search_p.add_argument("--top-k", type=int, default=5, help="Number of chunks to return (default: 5)")
     search_p.add_argument("--ticker", help="Source B ticker filter (e.g., AAPL)")
     search_p.add_argument("--standard-id", dest="standard_id", help="Source A standard ID filter (e.g., AS1105)")
-    search_p.add_argument("--where", help="Raw ChromaDB where clause as JSON (e.g., '{\"source_type\": \"A\"}')")
+    search_p.add_argument("--where", help=(
+        "Raw ChromaDB where clause as JSON object (e.g., '{\"source_type\": \"A\"}'). "
+        "When combined with --ticker or --standard-id, all filters are merged with "
+        "ChromaDB $and. Note: if --where sets a key that --ticker/--standard-id also "
+        "sets, both appear in the $and clause — ChromaDB will reject conflicting values."
+    ))
     search_p.add_argument(
         "--use-router", dest="use_router", action=argparse.BooleanOptionalAction,
         default=True, help="Use router for multi-source search (default: True)",

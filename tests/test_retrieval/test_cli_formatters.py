@@ -73,6 +73,21 @@ class TestContentPreview:
     def test_empty_content(self):
         assert _content_preview("", show_content=True) == ""
 
+    def test_none_content_returns_empty(self):
+        """Defensive: None content returns empty string instead of crashing."""
+        assert _content_preview(None, show_content=True) == ""
+
+    def test_newlines_collapsed_to_spaces(self):
+        """Newlines in content would break table column alignment; collapse them."""
+        result = _content_preview("line one\nline two\twith tab", show_content=True)
+        assert "\n" not in result
+        assert "\t" not in result
+        assert "line one line two with tab" == result
+
+    def test_multiple_spaces_collapsed(self):
+        result = _content_preview("hello   world", show_content=True)
+        assert result == "hello world"
+
 
 # ---------------------------------------------------------------------------
 # _format_table
@@ -144,6 +159,18 @@ class TestFormatTable:
         # The 500-char content should be truncated in the table view (max 80 chars per column)
         assert "x" * 500 not in output
 
+    def test_newlines_in_content_do_not_break_table_alignment(self):
+        """Content with newlines would split into multiple rows visually."""
+        chunk = _make_chunk(content="paragraph one\n\nparagraph two")
+        result = SearchResult(query="q", chunks=[chunk])
+        output = _format_table(result)
+
+        # Newlines collapsed — no raw \n in the table body
+        # (the trailing newline from join() is fine; we check the row line)
+        rows = [line for line in output.split("\n") if chunk.chunk_id in line]
+        assert len(rows) == 1
+        assert "\n" not in rows[0]
+
 
 # ---------------------------------------------------------------------------
 # _format_json
@@ -208,6 +235,30 @@ class TestFormatJson:
         )
         payload = json.loads(_format_json(result))
         assert payload["sources_searched"] == ["A", "C"]
+
+    def test_unicode_preserved_not_escaped(self):
+        """ensure_ascii=False keeps non-ASCII chars as-is, not \\uXXXX escapes.
+
+        Audit content may contain em dashes, smart quotes, or non-Latin
+        characters; escaped output is harder to read and diff.
+        """
+        chunk = _make_chunk(content="Northwind — IFRS-15 compliance")
+        result = SearchResult(query="q", chunks=[chunk])
+        output = _format_json(result)
+
+        # The em dash should appear literally (not as —)
+        assert "— IFRS-15" in output
+        assert "\\u2014" not in output
+
+    def test_unicode_round_trip(self):
+        """JSON output with non-ASCII chars parses back to the original string."""
+        original_content = "Northwind — IFRS-15 compliance"
+        chunk = _make_chunk(content=original_content)
+        result = SearchResult(query="q", chunks=[chunk])
+        output = _format_json(result)
+
+        payload = json.loads(output)
+        assert payload["chunks"][0]["content"] == original_content
 
 
 # ---------------------------------------------------------------------------
