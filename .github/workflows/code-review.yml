@@ -1,0 +1,32 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Claude Code
+        run: pip install anthropic
+
+      - name: Run PR review agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          claude --print --dangerously-skip-permissions \
+            "You are the pr-review-agent. Review PR #${PR_NUMBER} changes. " \
+            "Post your review comments to the PR using the GitHub MCP tools. " \
+            "Read the agent prompt at .claude/agents/pr-review-agent.md for your full instructions."
