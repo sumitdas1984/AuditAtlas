@@ -1,7 +1,7 @@
 # Hybrid Data Ingestion & Retrieval Pipeline — Design
 
 **Phase**: 4–5
-**Status**: Design
+**Status**: Implemented (Phase 4 done, Phase 5 in progress — see "Retrieval Usage" sections below)
 
 ---
 
@@ -110,7 +110,7 @@ This document defines the architecture for AuditAtlas's hybrid knowledge base �
 
 ## Storage Schema
 
-### JSON Store — `data/knowledge_base/chunks.json`
+### JSON Store — `data/knowledge_base/chunks.jsonl`
 
 One JSON object per line (JSONL format). Each chunk is a complete, citable unit.
 
@@ -351,10 +351,17 @@ python -m src.ingestion run --file data/raw/synthetic_company_docs/01-Internal-A
 
 ### Retrieval (Phase 5)
 
+The retrieval layer is implemented in `src/retrieval/`. The `Retriever` class
+wires together the `Router` (Phase 3), `Embedder`, `ChromaStore`, `JsonStore`,
+and `format_citation()` into a single search API. Both programmatic and CLI
+interfaces are supported.
+
+#### Programmatic API
+
 ```python
 from src.retrieval import Retriever
 
-retriever = Retriever()
+retriever = Retriever()  # uses defaults: Router(), standard stores
 
 result = retriever.search(
     query="What are the risk factors for Apple?",
@@ -365,9 +372,94 @@ result = retriever.search(
 # result.chunks[0].citation  # "[AAPL 10-K, Item 1A (2025)]"
 ```
 
----
+**Search with metadata filter** (TASK-5-2):
 
-## Directory Structure
+```python
+result = retriever.search("risk factors", ticker="AAPL", top_k=5)
+# Only Source B (10-K) chunks with ticker=AAPL
+
+result = retriever.search("audit evidence", standard_id="AS1105", top_k=5)
+# Only Source A (PCAOB) chunks for AS1105
+
+result = retriever.search("anything", where={"source_type": "A"}, top_k=5)
+# Raw ChromaDB where clause (advanced)
+```
+
+**Multi-source routing** (TASK-5-3):
+
+By default the Retriever consults the `Router` to pick source(s) for the query.
+For example, `"compliance requirements"` routes to A+B+C and returns
+mixed-source results sorted by ChromaDB distance.
+
+```python
+result = retriever.search("compliance requirements", top_k=5)
+
+# Inspect the routing decision
+print(result.routing.reasoning)    # "Topic 'compliance' with intent '...' -> primary: [...]"
+print(result.sources_searched)     # ["A", "B", "C"]
+print(len(result.chunks))          # 5 (or fewer)
+```
+
+To force single-source search (skip the router), pass `use_router=False`:
+
+```python
+result = retriever.search("anything", use_router=False)
+# Searches all sources without routing; result.routing is None
+```
+
+**`SearchResult` shape**:
+
+```python
+@dataclass
+class SearchResult:
+    query: str                                # original query
+    chunks: list[RetrievedChunk]              # ordered by distance (asc)
+    routing: Optional[RoutingResult]           # populated when router used
+    sources_searched: list[str]               # ["A", "B"] / ["A"] / etc.
+
+@dataclass
+class RetrievedChunk:
+    chunk_id: str
+    source_type: str                          # "A" | "B" | "C"
+    document_id: str
+    document_type: str
+    content: str                              # full chunk content
+    metadata: dict                            # source-specific
+    citation: str                             # "[AS 1105 § .12]" etc.
+    distance: float                           # lower = more similar
+```
+
+#### CLI
+
+```bash
+# Basic search
+python -m src.retrieval search "risk factors" --top-k 3
+
+# With metadata filter
+python -m src.retrieval search "audit evidence" --ticker AAPL
+python -m src.retrieval search "audit evidence" --standard-id AS1105
+
+# Raw ChromaDB where clause (JSON)
+python -m src.retrieval search "anything" --where '{"source_type": "A"}'
+
+# Disable router (single-source search)
+python -m src.retrieval search "anything" --no-use-router
+
+# JSON output (for piping to jq etc.)
+python -m src.retrieval search "audit risk" --format json
+```
+
+**Exit codes**:
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (including "no results found") |
+| 2 | Empty query |
+| 3 | Uninitialized knowledge base (run `python -m src.ingestion run --all`) |
+| 4 | Invalid `--where` JSON |
+| 5 | Runtime error (embedding model missing, ChromaDB failure, etc.) |
+
+---## Directory Structure
 
 ```
 src/
