@@ -27,4 +27,4 @@ The initial MVP focuses on:
 
 - TASK-6-1: LLM Client & Answer Generator — ✅ Complete (PR #37 merged)
 - TASK-6-2: Research Workflow Orchestration — ✅ Complete (PR #38 merged)
-- TASK-6-3: CLI, Integration Tests, Docs — ✅ Complete (in review)
+- TASK-6-3: CLI, Integration Tests, Docs — ✅ Complete (PR #39 merged)
