@@ -85,6 +85,18 @@ class TestJsonStore:
         result = temp_store.read("nonexistent")
         assert result is None
 
+    def test_read_missing_file_returns_none(self):
+        """Reading from a path that doesn't exist should return None, not raise."""
+        import os
+        missing_path = os.path.join(tempfile.gettempdir(), "definitely_not_here.jsonl")
+        # Ensure the file does not exist
+        if os.path.exists(missing_path):
+            os.unlink(missing_path)
+        store = JsonStore(missing_path)
+        # Both read() and read_all() should handle the missing file gracefully
+        assert store.read("anything") is None
+        assert store.read_all() == []
+
     def test_clear(self, temp_store, sample_chunk):
         """Test clearing the store."""
         temp_store.write(sample_chunk)
