@@ -21,3 +21,7 @@ __pycache__/
 
 # Python build
 *.egg-info/
+
+# Knowledge base (generated - do not commit)
+data/knowledge_base/
+!data/knowledge_base/.gitkeep
