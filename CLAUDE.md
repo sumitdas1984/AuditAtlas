@@ -22,12 +22,11 @@ Completed:
 - #3 (Knowledge Source Selection) — ✅ Closed
 - #4 (Knowledge Engineering) — ✅ Phase 3 complete
 - #5 (Data Ingestion) — ✅ Phase 4 complete
+- #6 (Retrieval System) — ✅ Phase 5 complete
 - #25 (TASK-5-1 Core Retriever) — ✅ Closed
 - #26 (TASK-5-2 Metadata Filtering) — ✅ Closed
 - #27 (TASK-5-3 Router Integration) — ✅ Closed
-
-In progress:
-- #6 (Retrieval System) — Phase 5 (TASK-5-4 remaining)
+- #28 (TASK-5-4 CLI, Integration Tests, Docs) — ✅ Closed
 
 Future:
 - #7–#9 — Phases 6–8
