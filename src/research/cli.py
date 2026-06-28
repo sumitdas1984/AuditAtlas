@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 from ..knowledge_engineering.citation import SourceType, format_citation
@@ -33,6 +34,34 @@ from .models import ResearchResult
 from .workflow import ResearchWorkflow, WorkflowError
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# .env loading
+# ---------------------------------------------------------------------------
+
+def _load_env_file(env_path: Path | None = None) -> None:
+    """Load a .env file from disk into os.environ, if present.
+
+    Uses `python-dotenv` with `override=False` so env vars already set in
+    the shell take precedence over .env file values (12-factor convention).
+
+    Args:
+        env_path: Path to .env. Defaults to the project-root .env. Pass an
+            explicit path (e.g., a temp file) in tests.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        # python-dotenv missing — skip silently; env vars must be set externally
+        return
+
+    if env_path is None:
+        # src/research/cli.py → project root = parents[2]
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=False)
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +173,9 @@ def run_research(
     Returns:
         (exit_code, output) tuple.
     """
+    # Load .env file (if present) so ANTHROPIC_API_KEY is in os.environ
+    _load_env_file()
+
     # Input validation
     if not query or not query.strip():
         return 2, "Error: query cannot be empty"
@@ -247,6 +279,9 @@ def run_research(
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for `python -m src.research`."""
+    # Load .env so ANTHROPIC_API_KEY is in os.environ before run_research is called
+    _load_env_file()
+
     import argparse
 
     parser = argparse.ArgumentParser(
