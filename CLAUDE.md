@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AuditAtlas is an AI-powered Audit Research Assistant for audit professionals. The system combines retrieval, reasoning, and source attribution to provide evidence-backed answers with traceable citations.
 
-**Current status**: Phase 4 (Data Ingestion) complete. Phase 5 (Retrieval System) complete. Phase 6 (Agentic Research Workflow) in progress — TASK-6-1, TASK-6-2 done. TASK-6-3 (CLI, integration tests, docs) next.
+**Current status**: Phase 4 (Data Ingestion) complete. Phase 5 (Retrieval System) complete. Phase 6 (Agentic Research Workflow) — TASK-6-1, TASK-6-2, TASK-6-3 all done. Phase 6 ready to merge.
 
 ## Branch Strategy
 

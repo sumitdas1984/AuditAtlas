@@ -11,10 +11,11 @@ from src.ingestion.chunkers.chunker import Chunk
 from src.ingestion.embedder.embedder import Embedder
 from src.ingestion.storage.chroma_store import ChromaStore
 from src.ingestion.storage.json_store import JsonStore
-from src.research import ResearchWorkflow
+from src.research import ResearchResult, ResearchWorkflow
 from src.research.answer_generator import AnswerGenerator
 from src.research.llm_client import MockClient
 from src.research.workflow import ResearchWorkflow
+from src.retrieval import RetrievedChunk
 
 
 # ---------------------------------------------------------------------------
@@ -366,3 +367,301 @@ class TestResearchCliSubprocess:
         assert "query" in result.stdout
         assert "--top-k" in result.stdout
         assert "--use-mock-llm" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# TestFormatText (direct unit tests for _format_text)
+# ---------------------------------------------------------------------------
+
+class TestFormatText:
+    """Direct tests for the _format_text formatter (no subprocess)."""
+
+    def test_empty_citations_omits_sources_section(self):
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="no citations here", model="m"),
+        )
+        output = _format_text(result)
+        assert "no citations here" in output
+        assert "Sources:" not in output  # no citations → no Sources: section
+
+    def test_includes_numbered_citations(self):
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer, Citation
+        chunk = RetrievedChunk(
+            chunk_id="AS1105.12", source_type="A", document_id="AS1105",
+            document_type="Standard", content="text", metadata={},
+            citation="[AS 1105 § .12]", distance=0.1,
+        )
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(
+                text="answer",
+                citations=[Citation(marker="[[AS1105.12]]", chunk_id="AS1105.12", chunk=chunk)],
+                model="m",
+            ),
+        )
+        output = _format_text(result)
+        assert "[1] [AS 1105 § .12]" in output
+
+    def test_includes_footer_with_sources_and_latency(self):
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="a", model="m"),
+            sources_searched=["A", "B"],
+            latency_ms=123.0,
+        )
+        output = _format_text(result)
+        assert "Sources searched: ['A', 'B']" in output
+        assert "Latency: 123ms" in output
+
+    def test_omits_footer_when_fields_empty(self):
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="a", model="m"),
+        )
+        output = _format_text(result)
+        assert "Sources searched:" not in output
+        assert "Latency:" not in output
+        assert "Routing:" not in output
+
+    def test_newlines_in_answer_text_are_collapsed(self):
+        """Whitespace in answer text is sanitized so layout doesn't break."""
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="line one\n\nline two", model="m"),
+        )
+        output = _format_text(result)
+        # The line containing "line one" should not have raw \n
+        for line in output.split("\n"):
+            if "line one" in line:
+                assert "\n" not in line
+        # The text should be flattened
+        assert "line one line two" in output
+
+    def test_unicode_in_answer_text_preserved(self):
+        """ensure_ascii=False → em dashes and smart quotes appear literally."""
+        from src.research.cli import _format_text
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="Northwind — IFRS-15", model="m"),
+        )
+        output = _format_text(result)
+        assert "— IFRS-15" in output  # em dash literal
+        assert "\\u2014" not in output  # no escape sequence
+
+
+# ---------------------------------------------------------------------------
+# TestFormatJson (direct unit tests for _format_json)
+# ---------------------------------------------------------------------------
+
+class TestFormatJson:
+    """Direct tests for the _format_json formatter."""
+
+    def test_empty_chunks_produces_valid_json(self):
+        from src.research.cli import _format_json
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="a", model="m"),
+        )
+        payload = json.loads(_format_json(result))
+        assert payload["query"] == "q"
+        assert payload["chunks"] == []
+        assert payload["answer"]["citations"] == []
+
+    def test_round_trip_with_all_fields(self):
+        from src.research.cli import _format_json
+        from src.research.models import CitedAnswer, Citation
+        from src.knowledge_engineering.router import RoutingResult, SourceType
+        chunk = RetrievedChunk(
+            chunk_id="X.1", source_type="A", document_id="X",
+            document_type="Standard", content="text", metadata={},
+            citation="[X]", distance=0.1,
+        )
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(
+                text="a",
+                citations=[Citation(marker="[[X.1]]", chunk_id="X.1", chunk=chunk)],
+                model="m",
+            ),
+            chunks=[chunk],
+            routing=RoutingResult(
+                sources=[SourceType.SOURCE_A, SourceType.SOURCE_B],
+                confidence=0.9,
+                reasoning="test",
+            ),
+            sources_searched=["A", "B"],
+            latency_ms=42.0,
+        )
+        payload = json.loads(_format_json(result))
+        assert payload["query"] == "q"
+        assert payload["answer"]["text"] == "a"
+        assert payload["answer"]["citations"][0]["chunk_id"] == "X.1"
+        assert len(payload["chunks"]) == 1
+        assert payload["routing"]["sources"] == ["A", "B"]
+        assert payload["routing"]["confidence"] == 0.9
+        assert payload["sources_searched"] == ["A", "B"]
+        assert payload["latency_ms"] == 42.0
+
+    def test_routing_absent_when_none(self):
+        from src.research.cli import _format_json
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="a", model="m"),
+        )
+        payload = json.loads(_format_json(result))
+        assert "routing" not in payload
+
+    def test_unicode_preserved_in_json(self):
+        from src.research.cli import _format_json
+        from src.research.models import CitedAnswer
+        result = ResearchResult(
+            query="q",
+            answer=CitedAnswer(text="Northwind — IFRS-15", model="m"),
+        )
+        output = _format_json(result)
+        assert "— IFRS-15" in output
+        assert "\\u2014" not in output
+
+
+# ---------------------------------------------------------------------------
+# TestMainEntry (direct unit tests for main() argparse)
+# ---------------------------------------------------------------------------
+
+class TestMainEntry:
+    """Direct tests for the main() argparse entry point."""
+
+    def test_main_no_command_prints_help(self, capsys):
+        from src.research.cli import main
+        exit_code = main([])
+        captured = capsys.readouterr()
+        # No command → prints help, returns 0
+        assert exit_code == 0
+        assert "workflow" in captured.out  # help mentions the subcommand
+
+    def test_main_workflow_delegates_to_run_research(self, populated_kb, monkeypatch, capsys):
+        """workflow subcommand triggers run_research with parsed args."""
+        from src.research.cli import main
+        chroma, json_store, _, collection_name = populated_kb
+
+        # Capture run_research calls
+        captured_args = {}
+        original_run_research = main.__globals__["run_research"]
+
+        def fake_run_research(**kwargs):
+            captured_args.update(kwargs)
+            return 0, "fake output"
+
+        monkeypatch.setattr("src.research.cli.run_research", fake_run_research)
+
+        exit_code = main([
+            "workflow", "test query",
+            "--top-k", "3",
+            "--ticker", "AAPL",
+            "--use-mock-llm",
+            "--format", "json",
+            "--chroma-dir", str(chroma.persist_dir),
+            "--collection-name", collection_name,
+            "--jsonl-path", str(json_store.store_path),
+        ])
+        assert exit_code == 0
+        # Check the kwargs that were passed
+        assert captured_args["query"] == "test query"
+        assert captured_args["top_k"] == 3
+        assert captured_args["ticker"] == "AAPL"
+        assert captured_args["use_mock_llm"] is True
+        assert captured_args["output_format"] == "json"
+        assert captured_args["chroma_dir"] == str(chroma.persist_dir)
+        assert captured_args["collection_name"] == collection_name
+        assert captured_args["jsonl_path"] == str(json_store.store_path)
+
+
+# ---------------------------------------------------------------------------
+# TestRunResearchAdditional (additional edge cases)
+# ---------------------------------------------------------------------------
+
+class TestRunResearchAdditional:
+    """Edge cases for run_research not covered by the basic suite."""
+
+    def test_workflow_error_returns_exit_5(self, populated_kb):
+        """If the workflow raises WorkflowError, run_research returns exit 5."""
+        from src.research.cli import run_research
+        from src.research import WorkflowError
+        from unittest.mock import patch
+
+        chroma, json_store, _, collection_name = populated_kb
+
+        # Patch the workflow's run() to raise WorkflowError
+        with patch.object(ResearchWorkflow, "run") as mock_run:
+            mock_run.side_effect = WorkflowError("test workflow failure")
+            code, output = run_research(
+                query="x",
+                use_mock_llm=True,
+                chroma_dir=str(chroma.persist_dir),
+                collection_name=collection_name,
+                jsonl_path=str(json_store.store_path),
+            )
+        assert code == 5
+        assert "test workflow failure" in output
+
+    def test_default_top_k_is_5(self, populated_kb):
+        """When top_k not specified, default 5 is used."""
+        from src.research.cli import run_research
+        from src.research.models import CitedAnswer
+        from unittest.mock import patch
+
+        chroma, json_store, _, collection_name = populated_kb
+
+        with patch.object(ResearchWorkflow, "run") as mock_run:
+            mock_run.return_value = ResearchResult(
+                query="x",
+                answer=CitedAnswer(text="a", model="m"),
+            )
+            run_research(
+                query="x",
+                use_mock_llm=True,
+                chroma_dir=str(chroma.persist_dir),
+                collection_name=collection_name,
+                jsonl_path=str(json_store.store_path),
+            )
+        # run_research called with top_k=5
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("top_k") == 5
+
+    def test_ticker_and_standard_id_both_passed(self, populated_kb):
+        """Both ticker and standard_id flow through to workflow.run."""
+        from src.research.cli import run_research
+        from src.research.models import CitedAnswer
+        from unittest.mock import patch
+
+        chroma, json_store, _, collection_name = populated_kb
+
+        with patch.object(ResearchWorkflow, "run") as mock_run:
+            mock_run.return_value = ResearchResult(
+                query="x",
+                answer=CitedAnswer(text="a", model="m"),
+            )
+            run_research(
+                query="x",
+                use_mock_llm=True,
+                ticker="AAPL",
+                standard_id="AS1105",
+                chroma_dir=str(chroma.persist_dir),
+                collection_name=collection_name,
+                jsonl_path=str(json_store.store_path),
+            )
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("ticker") == "AAPL"
+        assert call_kwargs.get("standard_id") == "AS1105"
