@@ -89,3 +89,21 @@ class SqliteIndex:
                 (document_id,)
             )
             return [row[0] for row in cursor.fetchall()]
+
+    def query_by_ticker(self, ticker: str) -> list[str]:
+        """Get all chunk_ids for a given ticker (Source B)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT chunk_id FROM chunks WHERE ticker = ?",
+                (ticker,)
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def query_by_standard_id(self, standard_id: str) -> list[str]:
+        """Get all chunk_ids for a given PCAOB standard ID (Source A)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT chunk_id FROM chunks WHERE standard_id = ?",
+                (standard_id,)
+            )
+            return [row[0] for row in cursor.fetchall()]
