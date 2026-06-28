@@ -100,6 +100,12 @@ def post_pr_comment(comment_body):
     url = f"https://api.github.com/repos/{OWNER}/{REPO_NAME}/issues/{PR_NUMBER}/comments"
     payload = {"body": comment_body}
     resp = requests.post(url, headers=HEADERS, json=payload)
+    if resp.status_code == 403:
+        # Fork PR - token may not have write access
+        print("⚠️  Cannot post comment: 403 Forbidden (fork PR token restriction)")
+        print("Review output:")
+        print(comment_body)
+        return None
     resp.raise_for_status()
     return resp.json()
 
