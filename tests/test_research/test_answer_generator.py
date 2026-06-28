@@ -242,3 +242,189 @@ class TestAnthropicClientEnvVar:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "env-key-456")
         client = AnthropicClient()
         assert client.model == AnthropicClient.DEFAULT_MODEL
+
+    def test_custom_model_parameter_respected(self, monkeypatch):
+        """Custom model is stored and used, not the default."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+        client = AnthropicClient(model="claude-sonnet-4-6")
+        assert client.model == "claude-sonnet-4-6"
+        assert client.model != AnthropicClient.DEFAULT_MODEL
+
+
+# ---------------------------------------------------------------------------
+# TestResolveCitations (direct unit tests for the static helper)
+# ---------------------------------------------------------------------------
+
+class TestResolveCitations:
+    """Direct tests for AnswerGenerator._resolve_citations."""
+
+    def test_empty_text_returns_empty_list(self, sample_chunks):
+        result = AnswerGenerator._resolve_citations("", sample_chunks)
+        assert result == []
+
+    def test_text_with_no_citations(self, sample_chunks):
+        result = AnswerGenerator._resolve_citations(
+            "Just some text without any citation markers.", sample_chunks
+        )
+        assert result == []
+
+    def test_all_unknown_citations_dropped(self, sample_chunks, caplog):
+        with caplog.at_level("DEBUG", logger="src.research.answer_generator"):
+            result = AnswerGenerator._resolve_citations(
+                "See [[FAKE.1]] and [[FAKE.2]].", sample_chunks
+            )
+        assert result == []
+        assert "FAKE.1" in caplog.text
+        assert "FAKE.2" in caplog.text
+
+    def test_mixed_known_and_unknown(self, sample_chunks, caplog):
+        """Known citations kept in order, unknown ones silently dropped."""
+        with caplog.at_level("DEBUG", logger="src.research.answer_generator"):
+            result = AnswerGenerator._resolve_citations(
+                "[[FAKE.1]] then [[AS1105.12]] then [[FAKE.2]].", sample_chunks
+            )
+        # Only AS1105.12 survives; FAKE.1 and FAKE.2 dropped
+        assert [c.chunk_id for c in result] == ["AS1105.12"]
+        assert "FAKE.1" in caplog.text
+        assert "FAKE.2" in caplog.text
+
+    def test_citation_at_very_end_of_text(self, sample_chunks):
+        result = AnswerGenerator._resolve_citations(
+            "Some text [[AAPL.2025.Item1A.1]]", sample_chunks
+        )
+        assert len(result) == 1
+        assert result[0].chunk_id == "AAPL.2025.Item1A.1"
+
+    def test_marker_preserved_in_citation(self, sample_chunks):
+        """The marker field stores the literal [[chunk_id]] string."""
+        result = AnswerGenerator._resolve_citations(
+            "See [[AS1105.12]].", sample_chunks
+        )
+        assert result[0].marker == "[[AS1105.12]]"
+
+    def test_empty_retrieved_chunks(self):
+        """No retrieved chunks → no citations possible (any marker is unknown)."""
+        result = AnswerGenerator._resolve_citations(
+            "[[AS1105.12]]", []
+        )
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# TestCitationDataclass
+# ---------------------------------------------------------------------------
+
+class TestCitationDataclass:
+    def test_construct_and_access_fields(self, sample_chunks):
+        c = Citation(
+            marker="[[AS1105.12]]",
+            chunk_id="AS1105.12",
+            chunk=sample_chunks[0],
+        )
+        assert c.marker == "[[AS1105.12]]"
+        assert c.chunk_id == "AS1105.12"
+        assert c.chunk is sample_chunks[0]
+
+    def test_two_citations_with_same_chunk_id_are_distinct_objects(self, sample_chunks):
+        c1 = Citation(marker="[[AS1105.12]]", chunk_id="AS1105.12", chunk=sample_chunks[0])
+        c2 = Citation(marker="[[AS1105.12]]", chunk_id="AS1105.12", chunk=sample_chunks[0])
+        # Same data but distinct instances
+        assert c1 is not c2
+        assert c1 == c2  # dataclass equality
+
+
+# ---------------------------------------------------------------------------
+# TestPromptEdgeCases
+# ---------------------------------------------------------------------------
+
+class TestPromptEdgeCases:
+    def test_prompt_with_empty_chunks(self):
+        """Empty chunks list still produces a valid (degenerate) prompt."""
+        system, user = build_cited_answer_prompt("any question", [])
+        assert "any question" in user
+        assert "Source chunks:" in user
+        # No chunk lines, but no crash
+        assert "Answer:" in user
+
+    def test_prompt_with_single_chunk(self):
+        chunk = _make_chunk("X.1", content="solo content")
+        system, user = build_cited_answer_prompt("q", [chunk])
+        assert "1. [X.1]" in user
+        assert "2." not in user  # only one chunk
+
+    def test_prompt_with_empty_chunk_content(self):
+        chunk = _make_chunk("X.1", content="")
+        system, user = build_cited_answer_prompt("q", [chunk])
+        # Empty content should still produce a line; just with empty quotes
+        assert '[X.1] ""' in user
+
+    def test_prompt_preserves_special_chars_in_chunk_id(self):
+        chunk = _make_chunk("AS-1105.12.b", content="content")
+        system, user = build_cited_answer_prompt("q", [chunk])
+        assert "[AS-1105.12.b]" in user
+
+
+# ---------------------------------------------------------------------------
+# TestMockClientEdgeCases
+# ---------------------------------------------------------------------------
+
+class TestMockClientEdgeCases:
+    def test_default_response_is_empty_string(self):
+        """MockClient with no args returns '' for every call."""
+        mock = MockClient()
+        assert mock.complete("s", "u") == ""
+
+    def test_raise_takes_precedence_over_response(self):
+        """If both raise_on_call and response are set, raise wins."""
+        mock = MockClient(
+            response="should be ignored",
+            raise_on_call=ValueError("override"),
+        )
+        with pytest.raises(ValueError, match="override"):
+            mock.complete("s", "u")
+
+    def test_default_max_tokens_is_1024(self):
+        mock = MockClient(response="r")
+        mock.complete("s", "u")
+        assert mock.calls[0]["max_tokens"] == 1024
+
+
+# ---------------------------------------------------------------------------
+# TestAnswerGeneratorIntegration
+# ---------------------------------------------------------------------------
+
+class TestAnswerGeneratorIntegration:
+    """End-to-end behavior of generate() with non-trivial MockClient setups."""
+
+    def test_generate_with_callable_mock_uses_query(self, sample_chunks):
+        """Callable MockClient receives the query in the user prompt."""
+        captured = {}
+
+        def capture(system, user, max_tokens):
+            captured["system"] = system
+            captured["user"] = user
+            return "Per [[AS1105.12]], evidence is required."
+
+        mock = MockClient(response=capture)
+        gen = AnswerGenerator(llm_client=mock)
+        result = SearchResult(query="What about evidence?", chunks=sample_chunks)
+        gen.generate(result)
+
+        assert "What about evidence?" in captured["user"]
+        assert "AS1105.12" in captured["user"]
+
+    def test_generate_with_empty_chunks_does_not_call_llm(self, sample_chunks):
+        """Empty chunks path must NOT call the LLM (avoids wasted API call)."""
+        mock = MockClient(response="ignored")
+        gen = AnswerGenerator(llm_client=mock)
+        result = SearchResult(query="q", chunks=[])
+        gen.generate(result)
+        assert mock.calls == []  # no LLM call for empty chunks
+
+    def test_default_max_tokens_passed_to_llm(self, sample_chunks):
+        """When max_tokens not specified, default 1024 is used."""
+        mock = MockClient(response="r")
+        gen = AnswerGenerator(llm_client=mock)  # default max_tokens
+        result = SearchResult(query="q", chunks=sample_chunks)
+        gen.generate(result)
+        assert mock.calls[0]["max_tokens"] == 1024
