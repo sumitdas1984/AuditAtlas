@@ -8,8 +8,9 @@ Verifies that:
 - `use_router=False` and missing router gracefully fall back to single search
 """
 
-import pytest
+from pathlib import Path
 
+from src.ingestion.embedder.embedder import Embedder
 from src.knowledge_engineering.router import Router
 from src.retrieval import Retriever, SearchResult
 
@@ -203,8 +204,6 @@ class TestRetrieverWithRouterHelpers:
 
     def test_search_multi_source_dedupes_by_chunk_id(self, populated_stores):
         """If the same chunk_id appears in multiple sources, only the first (closer) is kept."""
-        from src.ingestion.embedder.embedder import Embedder
-
         chroma, json_store, _ = populated_stores
         retriever = Retriever(
             chroma_store=chroma,
@@ -226,8 +225,6 @@ class TestRetrieverWithRouterHelpers:
 
     def test_search_multi_source_empty_routing_returns_empty(self, populated_stores):
         """RoutingResult with no sources yields no chunks."""
-        from src.ingestion.embedder.embedder import Embedder
-
         chroma, json_store, _ = populated_stores
         retriever = Retriever(
             chroma_store=chroma,
@@ -239,3 +236,140 @@ class TestRetrieverWithRouterHelpers:
         chunks = retriever._search_multi_source("anything", top_k=5, routing_result=routing)
 
         assert chunks == []
+
+    def test_search_multi_source_truncates_to_top_k(self, populated_stores):
+        """When merged candidate count exceeds top_k, truncate after distance sort."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma,
+            json_store=json_store,
+            embedder=Embedder(),
+        )
+        from src.knowledge_engineering.router import RoutingResult, SourceType
+        routing = RoutingResult(
+            sources=[SourceType.SOURCE_A, SourceType.SOURCE_B, SourceType.SOURCE_C],
+            confidence=0.9,
+            reasoning="test",
+        )
+        chunks = retriever._search_multi_source("audit", top_k=1, routing_result=routing)
+        assert len(chunks) == 1
+
+    def test_search_multi_source_handles_top_k_larger_than_available(self, populated_stores):
+        """If total candidates < top_k, return all available without error."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma,
+            json_store=json_store,
+            embedder=Embedder(),
+        )
+        from src.knowledge_engineering.router import RoutingResult, SourceType
+        routing = RoutingResult(
+            sources=[SourceType.SOURCE_A, SourceType.SOURCE_B, SourceType.SOURCE_C],
+            confidence=0.9,
+            reasoning="test",
+        )
+        chunks = retriever._search_multi_source("audit", top_k=100, routing_result=routing)
+        # Fixture has 4 chunks total — should get all 4 (not 100)
+        assert len(chunks) == 4
+
+    def test_search_multi_source_handles_single_source(self, populated_stores):
+        """RoutingResult with one source works the same as multi-source (just smaller pool)."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma,
+            json_store=json_store,
+            embedder=Embedder(),
+        )
+        from src.knowledge_engineering.router import RoutingResult, SourceType
+        routing = RoutingResult(
+            sources=[SourceType.SOURCE_A],
+            confidence=0.9,
+            reasoning="test",
+        )
+        chunks = retriever._search_multi_source("audit evidence", top_k=5, routing_result=routing)
+
+        # All chunks must be Source A
+        for chunk in chunks:
+            assert chunk.source_type == "A"
+        # Sorted ascending
+        distances = [c.distance for c in chunks]
+        assert distances == sorted(distances)
+
+    def test_search_multi_source_skips_sources_with_no_results(self, temp_dir, embedder):
+        """If one source returns no chunks, the others still contribute."""
+        from src.ingestion.chunkers.chunker import Chunk
+        from src.ingestion.storage.chroma_store import ChromaStore
+        from src.ingestion.storage.json_store import JsonStore
+
+        # Only populate Source A — B and C will return no chunks
+        chroma = ChromaStore(persist_dir=str(Path(temp_dir) / "skipped"), collection_name="skipped")
+        json_store = JsonStore(store_path=str(Path(temp_dir) / "skipped.jsonl"))
+        chunk = Chunk(
+            chunk_id="AS1105.1",
+            source_type="A",
+            document_id="AS1105",
+            document_type="Standard",
+            chunk_index=1,
+            content="Audit evidence requirements.",
+            metadata={"standard_id": "AS1105"},
+            citation={"format": "[AS 1105 § .1]", "type": "pcaob"},
+        )
+        chroma.add([chunk], embedder)
+        json_store.write_batch([chunk])
+
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=embedder
+        )
+        from src.knowledge_engineering.router import RoutingResult, SourceType
+        routing = RoutingResult(
+            sources=[SourceType.SOURCE_A, SourceType.SOURCE_B, SourceType.SOURCE_C],
+            confidence=0.9,
+            reasoning="test",
+        )
+        chunks = retriever._search_multi_source("audit", top_k=5, routing_result=routing)
+
+        # Should get the A chunk; B and C gracefully return nothing
+        assert len(chunks) == 1
+        assert chunks[0].source_type == "A"
+
+
+class TestHydrateChunksFromRaw:
+    """Direct unit tests for the _hydrate_chunks_from_raw helper."""
+
+    def test_hydrate_chunks_from_raw_empty(self, populated_stores):
+        """Empty raw dict (all keys missing) returns empty list, no error."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder()
+        )
+        chunks = retriever._hydrate_chunks_from_raw({})
+        assert chunks == []
+
+    def test_hydrate_chunks_from_raw_with_none_values(self, populated_stores):
+        """Raw dict with None for ids/distances/metadatas is treated as empty."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder()
+        )
+        chunks = retriever._hydrate_chunks_from_raw({
+            "ids": None, "distances": None, "metadatas": None
+        })
+        assert chunks == []
+
+    def test_hydrate_chunks_from_raw_valid(self, populated_stores):
+        """Valid raw dict produces a hydrated RetrievedChunk."""
+        chroma, json_store, _ = populated_stores
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder()
+        )
+        chunks = retriever._hydrate_chunks_from_raw({
+            "ids": [["AS1105.12"]],
+            "distances": [[0.1]],
+            "metadatas": [[{
+                "source_type": "A", "document_type": "Standard", "chunk_id": "AS1105.12"
+            }]],
+        })
+        assert len(chunks) == 1
+        assert chunks[0].chunk_id == "AS1105.12"
+        assert chunks[0].source_type == "A"
+        assert chunks[0].content  # hydrated from JSON store
