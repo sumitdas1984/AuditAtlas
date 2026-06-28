@@ -22,9 +22,15 @@ def temp_dir():
         pass
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def embedder():
-    """Default Embedder instance."""
+    """Default Embedder instance.
+
+    Module-scoped because loading the sentence-transformer model is expensive
+    (~1-2s) and the model is read-only — safe to share across tests in a
+    module. Per-function fixtures that wrap it (e.g., populated_stores) still
+    create fresh ChromaStore/JsonStore instances per test.
+    """
     return Embedder()
 
 

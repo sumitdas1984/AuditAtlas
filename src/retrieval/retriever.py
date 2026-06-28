@@ -76,7 +76,11 @@ class Retriever:
         if not query or not query.strip():
             return SearchResult(query=query, chunks=[])
 
-        # Decide whether to use router
+        # Routing decision: use the router when the caller hasn't already made
+        # a routing decision (explicit filters) AND didn't opt out (use_router).
+        # Intentional design: explicit filters bypass routing because the caller
+        # has scoped the search — re-routing could narrow results the caller
+        # explicitly wanted. Pass use_router=False to force single-search mode.
         has_explicit_filter = (
             where is not None or bool(ticker) or bool(standard_id)
         )
@@ -87,6 +91,11 @@ class Retriever:
         if should_route:
             routing_result = self.router.route(query)
             if routing_result.sources:
+                # Error propagation note: if any per-source ChromaDB query
+                # raises (e.g., collection missing, transient error), the
+                # exception propagates and the whole search fails. This is the
+                # safer MVP default — partial results could mislead the caller.
+                # Switch to per-source try/except if availability > correctness.
                 chunks = self._search_multi_source(query, top_k, routing_result)
                 return SearchResult(
                     query=query,
@@ -94,7 +103,9 @@ class Retriever:
                     routing=routing_result,
                     sources_searched=[s.value for s in routing_result.sources],
                 )
-            # Router returned no sources — fall through to single search
+            # Defensive fallback: Router returned no sources (shouldn't happen
+            # with the current Router — every topic has at least one primary
+            # source — but be defensive). Fall through to single search.
 
         # Single-search path (default when no router or explicit filter present)
         merged_where = self._build_where_clause(where, ticker, standard_id)
@@ -121,9 +132,21 @@ class Retriever:
     ) -> list[RetrievedChunk]:
         """Run a ChromaDB search per routed source and merge by distance.
 
+        Cross-source distance comparability assumption:
+            All sources MUST be embedded with the same model (same
+            dimensionality + same model weights) AND stored in collections
+            using the same distance metric. This is satisfied because every
+            ChromaStore in the knowledge base uses the single Retriever's
+            Embedder (sentence-transformers all-MiniLM-L6-v2, 384-dim) and
+            ChromaDB's default distance metric (L2). If sources ever diverge
+            on embedding model or distance metric, the global distance sort
+            below will silently produce garbage rankings.
+
         Over-fetches `top_k` per source so the merged result has enough
         material for distance-based global ranking. Deduplicates by chunk_id
-        (cross-source chunk_id collision should not happen but is defensive).
+        (cross-source chunk_id collision should not happen but is defensive);
+        when duplicates exist, the lowest-distance copy is kept (sort runs
+        before dedupe).
         """
         all_chunks: list[RetrievedChunk] = []
         for source in routing_result.sources:
@@ -135,17 +158,25 @@ class Retriever:
             )
             all_chunks.extend(self._hydrate_chunks_from_raw(raw))
 
-        # Global sort by distance ascending; dedupe by chunk_id; truncate to top_k
+        # Sort globally by distance ascending; then dedupe by chunk_id (first
+        # occurrence wins, which is the lowest-distance copy).
         all_chunks.sort(key=lambda c: c.distance)
+        return self._dedupe_chunks_by_id(all_chunks)[:top_k]
+
+    @staticmethod
+    def _dedupe_chunks_by_id(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+        """Remove duplicates by chunk_id, preserving first occurrence.
+
+        Callers should sort by distance before calling so the lowest-distance
+        copy is the one retained.
+        """
         seen: set[str] = set()
         deduped: list[RetrievedChunk] = []
-        for chunk in all_chunks:
+        for chunk in chunks:
             if chunk.chunk_id in seen:
                 continue
             seen.add(chunk.chunk_id)
             deduped.append(chunk)
-            if len(deduped) >= top_k:
-                break
         return deduped
 
     def _hydrate_chunks_from_raw(self, raw: dict) -> list[RetrievedChunk]:

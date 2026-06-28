@@ -373,3 +373,86 @@ class TestHydrateChunksFromRaw:
         assert chunks[0].chunk_id == "AS1105.12"
         assert chunks[0].source_type == "A"
         assert chunks[0].content  # hydrated from JSON store
+
+
+class TestDedupeChunksById:
+    """Direct unit tests for the _dedupe_chunks_by_id helper."""
+
+    def test_dedupe_no_duplicates_returns_same_list(self):
+        chunks = [
+            _make_chunk("A.1", distance=0.1),
+            _make_chunk("B.1", distance=0.2),
+        ]
+        result = Retriever._dedupe_chunks_by_id(chunks)
+        assert len(result) == 2
+        assert [c.chunk_id for c in result] == ["A.1", "B.1"]
+
+    def test_dedupe_keeps_first_occurrence(self):
+        """When chunk_id appears twice, the first occurrence (lower distance after sort) wins."""
+        chunks = [
+            _make_chunk("X.1", distance=0.1, source="A"),
+            _make_chunk("X.1", distance=0.5, source="B"),  # same id, higher distance
+        ]
+        result = Retriever._dedupe_chunks_by_id(chunks)
+        assert len(result) == 1
+        assert result[0].chunk_id == "X.1"
+        assert result[0].distance == 0.1  # first occurrence wins
+        assert result[0].source_type == "A"
+
+    def test_dedupe_preserves_order_of_unique_ids(self):
+        chunks = [
+            _make_chunk("C.1", distance=0.3),
+            _make_chunk("A.1", distance=0.1),
+            _make_chunk("B.1", distance=0.2),
+        ]
+        result = Retriever._dedupe_chunks_by_id(chunks)
+        assert [c.chunk_id for c in result] == ["C.1", "A.1", "B.1"]
+
+    def test_dedupe_empty_list(self):
+        assert Retriever._dedupe_chunks_by_id([]) == []
+
+
+def _make_chunk(chunk_id: str, distance: float, source: str = "A"):
+    """Helper to build a RetrievedChunk for dedupe tests."""
+    from src.retrieval.models import RetrievedChunk
+    return RetrievedChunk(
+        chunk_id=chunk_id,
+        source_type=source,
+        document_id="DOC",
+        document_type="Standard",
+        content="text",
+        metadata={},
+        citation=f"[{chunk_id}]",
+        distance=distance,
+    )
+
+
+class TestSearchEmptyRoutingFallback:
+    """Verify that search() handles the defensive empty-routing case gracefully."""
+
+    def test_search_falls_through_to_single_search_when_routing_empty(self, populated_stores, monkeypatch):
+        """If Router.route() returns empty sources, search() falls through to single-search.
+
+        We patch the Router's route() to return empty sources and verify that
+        search() still returns results (via the single-search fallback path),
+        with routing=None (since the router didn't produce a usable result).
+        """
+        from src.knowledge_engineering.router import RoutingResult
+
+        chroma, json_store, _ = populated_stores
+        router = Router()
+
+        # Patch router.route to return empty sources
+        def fake_route(query, classifier=None):
+            return RoutingResult(sources=[], confidence=0.0, reasoning="forced empty")
+
+        monkeypatch.setattr(router, "route", fake_route)
+
+        retriever = Retriever(
+            chroma_store=chroma, json_store=json_store, embedder=Embedder(), router=router
+        )
+        result = retriever.search("audit evidence")
+
+        # Fell through to single-search — got results, no routing populated
+        assert result.routing is None
+        assert len(result.chunks) > 0
