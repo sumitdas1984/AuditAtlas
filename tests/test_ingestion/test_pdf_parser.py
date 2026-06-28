@@ -6,26 +6,52 @@ from src.ingestion.parsers.pdf_parser import PDFParser
 class TestPDFParser:
     """Tests for PDF parser."""
 
-    def test_extract_document_id_as_standard(self):
+    def test_extract_document_info_as_standard(self):
         """Test extraction of AS/QC standard IDs."""
         parser = PDFParser()
 
-        assert parser._extract_document_id("2024-004-as1000.pdf") == "AS1000"
-        assert parser._extract_document_id("2024-005-qc1000.pdf") == "QC1000"
-        assert parser._extract_document_id("AS2110-release.pdf") == "AS2110"
+        result = parser._extract_document_info("2024-004-as1000.pdf")
+        assert result["document_id"] == "AS1000"
+        assert result["document_type"] == "Standard"
 
-    def test_extract_document_id_release(self):
+        result = parser._extract_document_info("2024-005-qc1000.pdf")
+        assert result["document_id"] == "QC1000"
+
+        result = parser._extract_document_info("AS2110-release.pdf")
+        assert result["document_id"] == "AS2110"
+
+    def test_extract_document_info_release(self):
         """Test extraction of release numbers."""
         parser = PDFParser()
 
-        assert parser._extract_document_id("pcaob-release-no-2025-004.pdf") == "PCAOB-2025-004"
-        assert parser._extract_document_id("release_2010-004.pdf") == "PCAOB-2010-004"
+        result = parser._extract_document_info("pcaob-release-no-2025-004.pdf")
+        assert result["document_id"] == "PCAOB-2025-004"
 
-    def test_extract_document_id_staff_guidance(self):
+        result = parser._extract_document_info("release_2010-004.pdf")
+        assert result["document_id"] == "PCAOB-2010-004"
+
+    def test_extract_document_info_staff_guidance(self):
         """Test staff guidance document ID."""
         parser = PDFParser()
 
-        assert parser._extract_document_id("staff-guidance-evaluating.pdf") == "STAFF-GUIDANCE"
+        result = parser._extract_document_info("staff-guidance-evaluating.pdf")
+        assert result["document_id"] == "STAFF-GUIDANCE"
+
+    def test_extract_document_info_source_b(self):
+        """Test extraction of Source B (10-K) ticker and fiscal year."""
+        parser = PDFParser()
+
+        result = parser._extract_document_info("aapl-20250927.pdf")
+        assert result["document_id"] == "AAPL"
+        assert result["document_type"] == "10-K"
+        assert result["extra_metadata"]["ticker"] == "AAPL"
+        assert result["extra_metadata"]["fiscal_year"] == "2025"
+
+        result = parser._extract_document_info("msft.pdf")
+        assert result["document_id"] == "MSFT"
+        assert result["document_type"] == "10-K"
+        assert result["extra_metadata"]["ticker"] == "MSFT"
+        assert result["extra_metadata"]["fiscal_year"] == ""
 
     def test_split_into_paragraphs(self):
         """Test paragraph splitting."""

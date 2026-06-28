@@ -28,7 +28,7 @@
 **Source Location**: https://www.sec.gov/search-filings
 
 **Scope for MVP**:
-- 5 companies — TBD during Phase 2 evaluation
+- 5 companies — AAPL, AMZN, JPM, MSFT, TSLA (selected during Phase 2 evaluation)
 - Latest filing only — no prior year comparisons
 - 10-K annual reports only — no 10-Qs or 8-Ks
 

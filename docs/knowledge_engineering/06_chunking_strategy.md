@@ -58,22 +58,15 @@ Why: 10-K queries typically target a specific section ("risk factors" or "MD&A")
 ### Chunk ID Format
 
 ```
-{ticker}.{fiscal_year}.{item}
+{ticker}.{fiscal_year}.{item}.{paragraph_num}
 ```
 
 **Examples:**
-- `AAPL.2025.Item1A`
-- `JPM.2025.Item7`
-- `MSFT.2025.Item9A`
+- `AAPL.2025.Item1A.1`
+- `JPM.2025.Item7.1`
+- `MSFT.2025.Item9A.1`
 
-For sub-chunks within a section:
-
-```
-{ticker}.{fiscal_year}.{item}.{paragraph_index}
-```
-
-**Example:**
-- `AAPL.2025.Item1A.3` (third risk factor paragraph in Apple's 2025 filing)
+**Note**: `paragraph_num` is always present (currently always `1` since each Item is treated as a single chunk). Items in the chunk ID use no space (`Item1A`, not `Item 1A`).
 
 ### Rules
 
@@ -125,7 +118,7 @@ Each section in synthetic docs is semantically self-contained. A heading like "F
 | Source | Chunk Unit | Chunk ID Format | Example |
 |--------|-----------|-----------------|---------|
 | A — PCAOB | Paragraph | `{standard_id}.{paragraph}` | `AS1105.12` |
-| B — SEC 10-K | Section + paragraph | `{ticker}.{year}.{item}` | `AAPL.2025.Item1A` |
+| B — SEC 10-K | Section | `{ticker}.{year}.{item}.{paragraph_num}` | `AAPL.2025.Item1A.1` |
 | C — Synthetic | Heading section | `{doc_id}.{section}` | `IA-2026-004.3.1` |
 
 ---

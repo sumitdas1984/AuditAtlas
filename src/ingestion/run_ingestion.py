@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .parsers.markdown_parser import MarkdownParser
 from .parsers.pdf_parser import PDFParser
-from .chunkers.chunker import SourceCChunker, SourceAChunker
+from .chunkers.chunker import SourceCChunker, SourceAChunker, SourceBChunker
 from .embedder.embedder import Embedder
 from .storage.json_store import JsonStore
 from .storage.sqlite_index import SqliteIndex
@@ -53,6 +53,50 @@ def run_source_a(args) -> None:
         total_chunks += len(chunks)
 
     print(f"\nSource A ingestion complete: {total_chunks} chunks from {len(pdf_files)} documents")
+
+
+def run_source_b(args) -> None:
+    """Ingest Source B (SEC 10-K PDF) documents."""
+    source_dir = Path("data/raw/sec_10k")
+    if not source_dir.exists():
+        print(f"Source directory not found: {source_dir}")
+        sys.exit(1)
+
+    # Find all PDF files
+    pdf_files = list(source_dir.glob("*.pdf"))
+    if not pdf_files:
+        print(f"No PDF files found in {source_dir}")
+        sys.exit(1)
+
+    # Initialize components
+    parser = PDFParser()
+    chunker = SourceBChunker()
+    embedder = Embedder()
+    json_store = JsonStore()
+    sqlite_index = SqliteIndex()
+    chroma_store = ChromaStore()
+
+    total_chunks = 0
+
+    for pdf_file in pdf_files:
+        print(f"Processing: {pdf_file.name}")
+
+        # Parse
+        parsed = parser.parse(pdf_file)
+        print(f"  Parsed: {parsed.document_id} ({parsed.document_type})")
+
+        # Chunk
+        chunks = chunker.chunk(parsed)
+        print(f"  Chunks: {len(chunks)}")
+
+        # Store
+        json_store.write_batch(chunks)
+        sqlite_index.insert_batch(chunks)
+        chroma_store.add(chunks, embedder)
+
+        total_chunks += len(chunks)
+
+    print(f"\nSource B ingestion complete: {total_chunks} chunks from {len(pdf_files)} documents")
 
 
 def run_source_c(args) -> None:
@@ -153,6 +197,8 @@ def main():
     if args.command == "run":
         if args.source == "A":
             run_source_a(args)
+        elif args.source == "B":
+            run_source_b(args)
         elif args.source == "C" or args.file or args.all:
             if args.file:
                 run_single_file(args)
