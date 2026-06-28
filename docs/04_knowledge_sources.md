@@ -7,15 +7,15 @@
 **Source Location**: https://pcaobus.org/oversight/standards/auditing-standards
 
 **Scope for MVP**:
-- 5 selected PCAOB auditing standards
+- 6 PCAOB documents (PDF format)
 - Current versions only — no historical versions
 
-**MVP candidates**:
+**MVP documents**:
 - AS 1000 — General Responsibilities of the Auditor
-- AS 1105 — Audit Evidence
-- AS 2110 — Identifying and Assessing Risks of Material Misstatement
-- AS 2201 — Audit of Internal Control Over Financial Reporting
-- AS 2301 — The Auditor's Use of the Work of Specialists
+- QC 1000 — Quality Control
+- Risk Assessment (release_2010-004)
+- Staff Guidance documents
+- Rulemaking releases
 
 **Out of Scope**: ASB standards, historical versions, older PCAOB standards not currently effective.
 
@@ -62,6 +62,6 @@
 
 | Source | Format | Volume (MVP) | Update Frequency |
 |---|---|---|---|
-| PCAOB Standards | HTML / PDF | 5 standards | As issued |
-| SEC 10-K Filings | HTML / XBRL | 5 filings | On filing release |
-| Synthetic Docs | Markdown / JSON | 5 documents | Static for MVP |
+| PCAOB Standards | PDF | 6 documents | As issued |
+| SEC 10-K Filings | PDF | 5 filings | On filing release |
+| Synthetic Docs | Markdown | 5 documents | Static for MVP |
