@@ -65,6 +65,7 @@ data/
 | `src/knowledge_engineering/` | Phase 3 code — schemas, models, router, citation |
 | `docs/data_ingestion/` | Phase 4 ingestion design documents |
 | `src/ingestion/` | Phase 4 ingestion pipeline code |
+| `docs/agentic_workflow/` | Phase 6 outputs — workflow architecture, prompt templates |
 | `src/retrieval/` | Phase 5 retrieval layer — Retriever, SearchResult, RetrievedChunk, CLI (`python -m src.retrieval search`) |
 | `src/research/` | Phase 6 research layer — AnswerGenerator, ResearchWorkflow, LLMClient (Anthropic/Mock), CitedAnswer, citation resolution |
 | `docs/02_product_plan.md` | Target users, core features, success metrics |
