@@ -47,6 +47,8 @@ class JsonStore:
 
     def read(self, chunk_id: str) -> dict | None:
         """Read a single chunk by chunk_id."""
+        if not self.store_path.exists():
+            return None
         with open(self.store_path, "r", encoding="utf-8") as f:
             for line in f:
                 record = json.loads(line)
