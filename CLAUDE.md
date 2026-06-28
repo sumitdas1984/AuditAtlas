@@ -88,6 +88,8 @@ data/
 | `sentence-transformers` | Embedding model (all-MiniLM-L6-v2) |
 | `python-frontmatter` | Markdown frontmatter parsing |
 | `pypdf` | PDF text extraction |
+| `anthropic` | Claude API client (Phase 6 research layer) |
+| `python-dotenv` | Load `.env` files for API key management |
 
 ## When Creating New Features
 

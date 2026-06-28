@@ -25,3 +25,6 @@ __pycache__/
 # Knowledge base (generated - do not commit)
 data/knowledge_base/
 !data/knowledge_base/.gitkeep
+
+# Environment variables (real .env files contain secrets — keep them local)
+.env
