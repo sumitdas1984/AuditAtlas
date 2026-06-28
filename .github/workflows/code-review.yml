@@ -17,17 +17,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Claude Code
-        run: pip install anthropic
+      - name: Install dependencies
+        run: pip install anthropic requests
 
-      - name: Run PR review agent
+      - name: Run PR review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          claude --dangerously-skip-permissions <<'PROMPT'
-          You are the pr-review-agent. Review PR #${PR_NUMBER} changes.
-          Post your review comments to the PR using the GitHub MCP tools.
-          Read the agent prompt at .claude/agents/pr-review-agent.md for your full instructions.
-          PROMPT
+          REPO: ${{ github.repository }}
+        run: python .github/workflows/run_review.py
