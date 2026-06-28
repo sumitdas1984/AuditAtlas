@@ -134,9 +134,9 @@ class Retriever:
         sources: set[str] = set()
         if where and "source_type" in where:
             sources.add(str(where["source_type"]))
-        if ticker is not None:
+        if ticker:  # truthy check skips None and ""
             sources.add("B")  # ticker is a Source B field
-        if standard_id is not None:
+        if standard_id:  # truthy check skips None and ""
             sources.add("A")  # standard_id is a Source A field
         return sorted(sources)
 
@@ -151,13 +151,19 @@ class Retriever:
         ChromaDB requires a single top-level operator (`field=value`,
         `$and=[...]`, `$or=[...]`). When multiple filters are supplied, we
         combine them with `$and` so callers don't have to.
+
+        Empty-string filter values (`ticker=""`, `standard_id=""`) are treated
+        the same as `None` — they are skipped, not turned into a literal match.
+        Rationale: a literal `{"ticker": ""}` would match no real chunks and
+        almost always indicates a caller bug, so we silently ignore it.
+        Empty `where={}` is also skipped.
         """
         conditions: list[dict] = []
         if where:
             conditions.append(dict(where))
-        if ticker is not None:
+        if ticker:  # truthy check skips None and ""
             conditions.append({"ticker": ticker})
-        if standard_id is not None:
+        if standard_id:  # truthy check skips None and ""
             conditions.append({"standard_id": standard_id})
 
         if not conditions:

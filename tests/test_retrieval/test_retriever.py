@@ -349,6 +349,57 @@ class TestRetrieverHelpers:
         Retriever._build_where_clause(original, "AAPL", None)
         assert original == {"source_type": "A"}  # unchanged
 
+    def test_build_where_clause_all_none_returns_none(self):
+        """With all kwargs None and no where, return None (not {}).
+
+        Critical: passing {} to ChromaDB raises ValueError because ChromaDB
+        requires exactly one top-level operator. So the helper must return
+        None (which the search() method passes through as 'no filter'),
+        never an empty dict.
+        """
+        result = Retriever._build_where_clause(None, None, None)
+        assert result is None
+        assert result != {}  # explicit: never return empty dict
+
+    def test_build_where_clause_empty_where_dict_returns_none(self):
+        """An empty `where={}` is treated as no filter (returns None)."""
+        result = Retriever._build_where_clause({}, None, None)
+        assert result is None
+
+    def test_build_where_clause_empty_string_ticker_is_skipped(self):
+        """ticker='' is treated as 'no filter' (skipped), not a literal match.
+
+        Rationale: a literal {"ticker": ""} would match no real chunks and
+        almost always indicates a caller bug. We silently skip it.
+        """
+        result = Retriever._build_where_clause(None, "", None)
+        assert result is None
+
+    def test_build_where_clause_empty_string_standard_id_is_skipped(self):
+        """standard_id='' is treated as 'no filter' (skipped), not a literal match."""
+        result = Retriever._build_where_clause(None, None, "")
+        assert result is None
+
+    def test_build_where_clause_both_empty_strings_returns_none(self):
+        """Both ticker='' and standard_id='' → no filter at all."""
+        result = Retriever._build_where_clause(None, "", "")
+        assert result is None
+
+    def test_build_where_clause_mixed_none_and_empty(self):
+        """Mixed None and '' are both skipped; only truthy filters survive."""
+        result = Retriever._build_where_clause({"source_type": "A"}, "", None)
+        assert result == {"source_type": "A"}
+
+    def test_infer_sources_searched_empty_string_ticker_not_counted(self):
+        """Empty-string ticker doesn't imply Source B (no actual filter applied)."""
+        result = Retriever._infer_sources_searched(None, "", None)
+        assert result == []
+
+    def test_infer_sources_searched_empty_string_standard_id_not_counted(self):
+        """Empty-string standard_id doesn't imply Source A (no actual filter applied)."""
+        result = Retriever._infer_sources_searched(None, None, "")
+        assert result == []
+
     def test_infer_sources_searched_no_filters(self):
         """No filters → empty list."""
         result = Retriever._infer_sources_searched(None, None, None)
