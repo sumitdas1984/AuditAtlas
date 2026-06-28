@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ..knowledge_engineering.citation import SourceType
+from ..knowledge_engineering.router import RoutingResult
 
 
 @dataclass
@@ -12,7 +13,7 @@ class RetrievedChunk:
 
     Attributes:
         chunk_id: Unique chunk identifier (matches the one assigned by the chunker).
-        source_type: One of "A" (PCAOB), "B" (SEC 10-K), "C" (Synthetic).
+        source_type: One of "A" (PCAOB), "B" (SEC 10-K), "C" (Synthetic").
         document_id: The parent document identifier (e.g., "AS1105", "AAPL", "IA-2026-004").
         document_type: Human-readable doc type (e.g., "Standard", "10-K", "InternalAuditReport").
         content: Full chunk text content.
@@ -38,13 +39,13 @@ class SearchResult:
     Attributes:
         query: The original query string.
         chunks: Retrieved chunks ordered by relevance (most similar first).
-        routing: Optional routing decision (set when Router is used; populated by TASK-5-3).
-        sources_searched: Optional list of source types queried (populated by multi-source).
+        routing: RoutingResult when the router was used; None otherwise.
+        sources_searched: List of source types searched (populated by multi-source).
     """
 
     query: str
     chunks: list[RetrievedChunk] = field(default_factory=list)
-    routing: Optional[object] = None  # RoutingResult from router.py; avoid import cycle
+    routing: Optional[RoutingResult] = None
     sources_searched: list[str] = field(default_factory=list)
 
 
