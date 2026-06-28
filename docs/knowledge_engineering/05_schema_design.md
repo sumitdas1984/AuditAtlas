@@ -23,15 +23,25 @@
 
 ## Source B — SEC 10-K Filings
 
+Per-chunk metadata (populated by `SourceBChunker`):
+
 | Field | Type | Example |
 |-------|------|---------|
-| `company_name` | string | Apple Inc. |
 | `ticker` | string | `AAPL` |
-| `filing_date` | date | `2025-09-27` |
-| `fiscal_year` | integer | `2025` |
-| `sections_present` | string[] | `["Item 1A", "Item 7", "Item 8", "Item 9A"]` |
-| `source_url` | string | `https://www.sec.gov/...` |
-| `file_path` | string | `data/raw/sec_10k/...` |
+| `fiscal_year` | string | `2025` (extracted from filename; empty if not present) |
+| `item` | string | `Item 1A` (the 10-K Item section this chunk represents) |
+| `company_name` | string | `AAPL` (defaults to ticker; not yet enriched with EDGAR data) |
+
+Per-document metadata (populated by `PDFParser` from filename):
+
+| Field | Type | Example |
+|-------|------|---------|
+| `document_id` | string | `AAPL` (the ticker) |
+| `document_type` | enum | `10-K` |
+| `source_url` | string | _not yet populated_ |
+| `file_path` | string | `data/raw/sec_10k/aapl-20250927.pdf` |
+
+**Known gaps**: `filing_date`, `sections_present`, and `company_name` enrichment from EDGAR are deferred to a post-MVP enhancement.
 
 ---
 
