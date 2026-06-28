@@ -17,7 +17,7 @@
 | `effective_date` | date | `2024-12-15` |
 | `status` | enum | `Effective`, `Proposed`, `Delayed` |
 | `source_url` | string | `https://pcaobus.org/...` |
-| `file_path` | string | `data/pcaob_standards/...` |
+| `file_path` | string | `data/raw/pcaob_standards/...` |
 
 ---
 
@@ -31,7 +31,7 @@
 | `fiscal_year` | integer | `2025` |
 | `sections_present` | string[] | `["Item 1A", "Item 7", "Item 8", "Item 9A"]` |
 | `source_url` | string | `https://www.sec.gov/...` |
-| `file_path` | string | `data/sec_10k/...` |
+| `file_path` | string | `data/raw/sec_10k/...` |
 
 ---
 
@@ -49,7 +49,7 @@ All fields apply to every synthetic doc. Fields not applicable to a document are
 | `classification` | enum | `Internal`, `Confidential` |
 | `owner` | string | Chief Risk Officer |
 | `company` | string | Northwind Retail Solutions Ltd. |
-| `file_path` | string | `data/synthetic_company_docs/...` |
+| `file_path` | string | `data/raw/synthetic_company_docs/...` |
 
 ---
 

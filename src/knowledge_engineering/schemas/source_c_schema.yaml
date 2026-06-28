@@ -51,5 +51,5 @@ fields:
 
   - name: file_path
     type: string
-    example: "data/synthetic_company_docs/01-Internal-Audit-Report.md"
+    example: "data/raw/synthetic_company_docs/01-Internal-Audit-Report.md"
     description: "Local path to the document file"
