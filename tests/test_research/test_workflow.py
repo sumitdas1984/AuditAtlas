@@ -11,6 +11,9 @@ from src.research import (
     ResearchWorkflow,
     WorkflowError,
 )
+from src.retrieval import RetrievedChunk
+from src.research.workflow import WorkflowError as WorkflowErrorDirect
+from src.research.models import ResearchResult as ResearchResultDirect
 
 
 class TestResearchWorkflowRun:
@@ -202,3 +205,166 @@ class TestResearchWorkflowLogging:
                 wf.run("query")
 
         assert "answer generation failed" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# TestResearchWorkflowEdgeCases
+# ---------------------------------------------------------------------------
+
+class TestResearchWorkflowEdgeCases:
+    """Edge cases not covered by the basic / error / empty tests."""
+
+    def test_default_top_k_is_5(self, mock_retriever, mock_answer_generator):
+        wf = ResearchWorkflow(
+            retriever=mock_retriever, answer_generator=mock_answer_generator
+        )
+        wf.run("query")
+        assert mock_retriever.calls[0]["top_k"] == 5
+
+    def test_llm_response_without_citations(self, mock_retriever):
+        """LLM returns answer with no [[chunk_id]] markers — workflow still succeeds."""
+        # MockClient returns a response that doesn't cite any chunk
+        no_cite_llm = MockClient(
+            response="Audit evidence is a key concept in PCAOB standards."
+        )
+        gen = AnswerGenerator(llm_client=no_cite_llm)
+        wf = ResearchWorkflow(retriever=mock_retriever, answer_generator=gen)
+
+        result = wf.run("query")
+        # Result still valid; citations empty
+        assert result.answer.text == "Audit evidence is a key concept in PCAOB standards."
+        assert result.answer.citations == []
+        # Chunks still attached
+        assert len(result.chunks) > 0
+
+    def test_chunks_attached_even_when_no_citations(self, mock_retriever):
+        """When LLM doesn't cite any chunk, the chunks list is still populated
+        so callers can render the full retrieval context."""
+        no_cite_llm = MockClient(response="Generic answer with no citations.")
+        gen = AnswerGenerator(llm_client=no_cite_llm)
+        wf = ResearchWorkflow(retriever=mock_retriever, answer_generator=gen)
+        result = wf.run("query")
+
+        # chunks is the same as what retriever returned
+        assert result.chunks is mock_retriever.chunks
+
+    def test_passes_where_dict_to_retriever(self, mock_retriever, mock_answer_generator):
+        """`where` dict is passed through correctly (not converted to anything)."""
+        wf = ResearchWorkflow(
+            retriever=mock_retriever, answer_generator=mock_answer_generator
+        )
+        wf.run("query", where={"source_type": "A", "ticker": "AAPL"})
+
+        call = mock_retriever.calls[0]
+        assert call["where"] == {"source_type": "A", "ticker": "AAPL"}
+
+    def test_passes_use_router_false_to_retriever(self, mock_retriever, mock_answer_generator):
+        wf = ResearchWorkflow(
+            retriever=mock_retriever, answer_generator=mock_answer_generator
+        )
+        wf.run("query", use_router=False)
+        assert mock_retriever.calls[0]["use_router"] is False
+
+    def test_retriever_with_one_chunk(self, mock_answer_generator):
+        """Single-chunk retrieval still works end-to-end."""
+        from src.retrieval.models import SearchResult
+
+        class OneChunkRetriever:
+            def search(self, *, query, top_k, **kwargs):
+                chunk = RetrievedChunk(
+                    chunk_id="AS1105.12", source_type="A", document_id="AS1105",
+                    document_type="Standard", content="Only chunk.",
+                    metadata={}, citation="[AS 1105 § .12]", distance=0.1,
+                )
+                return SearchResult(query=query, chunks=[chunk], sources_searched=["A"])
+
+        wf = ResearchWorkflow(
+            retriever=OneChunkRetriever(), answer_generator=mock_answer_generator
+        )
+        result = wf.run("query")
+        assert len(result.chunks) == 1
+
+
+# ---------------------------------------------------------------------------
+# TestResearchResultDataclass
+# ---------------------------------------------------------------------------
+
+class TestResearchResultDataclass:
+    """Direct unit tests for the ResearchResult dataclass."""
+
+    def test_construct_minimal(self, mock_answer_generator):
+        from src.research.models import CitedAnswer
+        answer = CitedAnswer(text="test", model="claude-haiku-4-5")
+        result = ResearchResult(query="q", answer=answer)
+        assert result.query == "q"
+        assert result.answer is answer
+        assert result.chunks == []
+        assert result.routing is None
+        assert result.sources_searched == []
+        assert result.latency_ms == 0.0
+
+    def test_construct_with_all_fields(self):
+        from src.research.models import CitedAnswer
+        chunk = RetrievedChunk(
+            chunk_id="X.1", source_type="A", document_id="X",
+            document_type="Standard", content="text", metadata={},
+            citation="[X]", distance=0.1,
+        )
+        routing_obj = object()  # stand-in for RoutingResult
+        answer = CitedAnswer(text="test", model="claude-haiku-4-5")
+        result = ResearchResult(
+            query="q",
+            answer=answer,
+            chunks=[chunk],
+            routing=routing_obj,
+            sources_searched=["A"],
+            latency_ms=42.5,
+        )
+        assert result.chunks == [chunk]
+        assert result.routing is routing_obj
+        assert result.sources_searched == ["A"]
+        assert result.latency_ms == 42.5
+
+    def test_dataclass_equality(self):
+        from src.research.models import CitedAnswer
+        answer = CitedAnswer(text="t", model="m")
+        r1 = ResearchResult(query="q", answer=answer)
+        r2 = ResearchResult(query="q", answer=answer)
+        # Distinct instances but same data
+        assert r1 is not r2
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# TestWorkflowError
+# ---------------------------------------------------------------------------
+
+class TestWorkflowError:
+    """Direct unit tests for the WorkflowError exception."""
+
+    def test_inherits_from_runtime_error(self):
+        """WorkflowError is a RuntimeError so generic except clauses work."""
+        err = WorkflowError("boom")
+        assert isinstance(err, RuntimeError)
+        assert str(err) == "boom"
+
+    def test_can_be_raised_and_caught(self):
+        with pytest.raises(WorkflowError, match="test message"):
+            raise WorkflowError("test message")
+
+    def test_chains_original_exception(self):
+        original = ValueError("root cause")
+        try:
+            try:
+                raise original
+            except ValueError as exc:
+                raise WorkflowError("wrapper") from exc
+        except WorkflowError as wrapped:
+            assert wrapped.__cause__ is original
+
+    def test_direct_import_works(self):
+        """The class is importable from both src.research.workflow and src.research."""
+        from src.research import WorkflowError as Imported
+        from src.research.workflow import WorkflowError as Direct
+        assert Imported is Direct
+        assert Imported is WorkflowErrorDirect
