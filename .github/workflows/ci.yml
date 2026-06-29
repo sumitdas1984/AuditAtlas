@@ -17,9 +17,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          pip install -e . pytest pytest-cov
+      # Cache the sentence-transformers model so subsequent CI runs reuse
+      # ~/.cache/huggingface instead of re-downloading the ~80MB model.
+      # Cache key includes pyproject.toml so a dependency bump invalidates
+      # the cache automatically.
+      - name: Cache sentence-transformers model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-st-model-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-st-model-
 
+      - name: Install dependencies
+        run: pip install -e . pytest pytest-cov pytest-xdist
+
+      # Run tests in parallel across cores (-n auto) and skip the slow
+      # subprocess-based CLI tests in CI. Slow tests still run locally
+      # via plain `pytest tests/`; CI gating on them isn't worth the
+      # extra minutes since the behavior is already covered in-process.
       - name: Run tests
-        run: python -m pytest tests/ -v --cov=src --cov-report=term-missing
+        run: python -m pytest tests/ -n auto -m "not slow" -v --cov=src --cov-report=term-missing

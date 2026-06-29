@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.13.4",
     "pytest>=9.1.1",
+    "pytest-xdist>=3.0.0",
     "chromadb>=0.4.0",
     "sentence-transformers>=2.0.0",
     "python-frontmatter>=1.0.0",
@@ -17,3 +18,6 @@ dependencies = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "slow: tests that spawn subprocesses or have multi-second runtime (CI skips these via -m 'not slow')",
+]
