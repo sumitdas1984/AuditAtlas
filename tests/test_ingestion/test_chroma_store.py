@@ -1,39 +1,8 @@
 import pytest
 import tempfile
 import shutil
-from pathlib import Path
 from src.ingestion.chunkers.chunker import Chunk
 from src.ingestion.storage.chroma_store import ChromaStore
-from src.ingestion.embedder.embedder import Embedder
-
-
-@pytest.fixture
-def sample_chunk():
-    """Create a sample chunk for testing."""
-    return Chunk(
-        chunk_id="TEST-001.1",
-        source_type="C",
-        document_id="TEST-001",
-        document_type="RiskRegister",
-        chunk_index=1,
-        content="## Risk Overview\n\nThis is a risk overview section.",
-        metadata={
-            "heading": "Risk Overview",
-            "level": 1,
-            "classification": "InternalConfidential",
-            "effective_date": "2026-01-15",
-        },
-        citation={
-            "format": "[RiskRegister:TEST-001]",
-            "type": "synthetic",
-        },
-    )
-
-
-@pytest.fixture
-def embedder():
-    """Create an embedder instance."""
-    return Embedder()
 
 
 class TestChromaStore:

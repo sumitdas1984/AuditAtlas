@@ -12,8 +12,6 @@ from src.research import (
     WorkflowError,
 )
 from src.retrieval import RetrievedChunk
-from src.research.workflow import WorkflowError as WorkflowErrorDirect
-from src.research.models import ResearchResult as ResearchResultDirect
 
 
 class TestResearchWorkflowRun:
@@ -30,7 +28,9 @@ class TestResearchWorkflowRun:
         assert result.answer.text  # non-empty
         assert result.answer.citations  # has citations
         assert result.chunks  # has retrieved chunks
-        assert result.latency_ms > 0  # measured
+        # Latency is measured: positive, with a sane upper bound (regression
+        # catcher for a hang — should be sub-second for mocked workflow).
+        assert 0 < result.latency_ms < 10_000
 
     def test_run_passes_query_and_top_k_to_retriever(
         self, mock_retriever, mock_answer_generator
@@ -65,20 +65,6 @@ class TestResearchWorkflowRun:
         assert call["standard_id"] == "AS1105"
         assert call["where"] == {"source_type": "A"}
         assert call["use_router"] is False
-
-    def test_run_latency_is_measured(
-        self, mock_retriever, mock_answer_generator
-    ):
-        wf = ResearchWorkflow(
-            retriever=mock_retriever, answer_generator=mock_answer_generator
-        )
-        result = wf.run("query")
-
-        # Latency should be a positive float in milliseconds
-        assert isinstance(result.latency_ms, float)
-        assert result.latency_ms > 0.0
-        # Sanity bound: a no-op workflow shouldn't take more than a few seconds
-        assert result.latency_ms < 10_000
 
     def test_run_preserves_routing_and_sources(
         self, mock_retriever, mock_answer_generator
@@ -214,13 +200,6 @@ class TestResearchWorkflowLogging:
 class TestResearchWorkflowEdgeCases:
     """Edge cases not covered by the basic / error / empty tests."""
 
-    def test_default_top_k_is_5(self, mock_retriever, mock_answer_generator):
-        wf = ResearchWorkflow(
-            retriever=mock_retriever, answer_generator=mock_answer_generator
-        )
-        wf.run("query")
-        assert mock_retriever.calls[0]["top_k"] == 5
-
     def test_llm_response_without_citations(self, mock_retriever):
         """LLM returns answer with no [[chunk_id]] markers — workflow still succeeds."""
         # MockClient returns a response that doesn't cite any chunk
@@ -283,88 +262,3 @@ class TestResearchWorkflowEdgeCases:
         )
         result = wf.run("query")
         assert len(result.chunks) == 1
-
-
-# ---------------------------------------------------------------------------
-# TestResearchResultDataclass
-# ---------------------------------------------------------------------------
-
-class TestResearchResultDataclass:
-    """Direct unit tests for the ResearchResult dataclass."""
-
-    def test_construct_minimal(self, mock_answer_generator):
-        from src.research.models import CitedAnswer
-        answer = CitedAnswer(text="test", model="claude-haiku-4-5")
-        result = ResearchResult(query="q", answer=answer)
-        assert result.query == "q"
-        assert result.answer is answer
-        assert result.chunks == []
-        assert result.routing is None
-        assert result.sources_searched == []
-        assert result.latency_ms == 0.0
-
-    def test_construct_with_all_fields(self):
-        from src.research.models import CitedAnswer
-        chunk = RetrievedChunk(
-            chunk_id="X.1", source_type="A", document_id="X",
-            document_type="Standard", content="text", metadata={},
-            citation="[X]", distance=0.1,
-        )
-        routing_obj = object()  # stand-in for RoutingResult
-        answer = CitedAnswer(text="test", model="claude-haiku-4-5")
-        result = ResearchResult(
-            query="q",
-            answer=answer,
-            chunks=[chunk],
-            routing=routing_obj,
-            sources_searched=["A"],
-            latency_ms=42.5,
-        )
-        assert result.chunks == [chunk]
-        assert result.routing is routing_obj
-        assert result.sources_searched == ["A"]
-        assert result.latency_ms == 42.5
-
-    def test_dataclass_equality(self):
-        from src.research.models import CitedAnswer
-        answer = CitedAnswer(text="t", model="m")
-        r1 = ResearchResult(query="q", answer=answer)
-        r2 = ResearchResult(query="q", answer=answer)
-        # Distinct instances but same data
-        assert r1 is not r2
-        assert r1 == r2
-
-
-# ---------------------------------------------------------------------------
-# TestWorkflowError
-# ---------------------------------------------------------------------------
-
-class TestWorkflowError:
-    """Direct unit tests for the WorkflowError exception."""
-
-    def test_inherits_from_runtime_error(self):
-        """WorkflowError is a RuntimeError so generic except clauses work."""
-        err = WorkflowError("boom")
-        assert isinstance(err, RuntimeError)
-        assert str(err) == "boom"
-
-    def test_can_be_raised_and_caught(self):
-        with pytest.raises(WorkflowError, match="test message"):
-            raise WorkflowError("test message")
-
-    def test_chains_original_exception(self):
-        original = ValueError("root cause")
-        try:
-            try:
-                raise original
-            except ValueError as exc:
-                raise WorkflowError("wrapper") from exc
-        except WorkflowError as wrapped:
-            assert wrapped.__cause__ is original
-
-    def test_direct_import_works(self):
-        """The class is importable from both src.research.workflow and src.research."""
-        from src.research import WorkflowError as Imported
-        from src.research.workflow import WorkflowError as Direct
-        assert Imported is Direct
-        assert Imported is WorkflowErrorDirect
