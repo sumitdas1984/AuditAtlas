@@ -1,8 +1,16 @@
 name: Code Review
 
+# This workflow is OPT-IN: it only runs the AI review job when the PR has
+# the `ai-review` label. Without the label the job is skipped entirely,
+# so no Anthropic tokens are consumed.
+#
+# To trigger a review: add the `ai-review` label to the PR.
+# To re-trigger after pushes: the `synchronize` type is still active, but
+# only when the label is present (the job-level `if:` gates execution).
+# To stop: remove the label.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -10,6 +18,9 @@ permissions:
 
 jobs:
   review:
+    # Gate execution on the PR having the `ai-review` label. This skips
+    # the entire job (no checkout, no API call) when the label is absent.
+    if: contains(github.event.pull_request.labels.*.name, 'ai-review')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

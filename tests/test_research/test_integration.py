@@ -281,8 +281,15 @@ def _run_cli(args: list[str], kb_paths: dict, cwd: str = ".") -> subprocess.Comp
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
 
 
+@pytest.mark.slow
 class TestResearchCliSubprocess:
-    """End-to-end via subprocess to verify __main__.py works."""
+    """End-to-end via subprocess to verify __main__.py works.
+
+    Each test spawns a fresh `python -m src.research` subprocess, paying the
+    cost of importing chromadb + sentence-transformers (~5-15s per test).
+    Marked `slow` so CI can skip via `pytest -m "not slow"`; locally these
+    still run to verify the wiring layer.
+    """
 
     def test_cli_workflow_basic_invocation(self, kb_paths):
         result = _run_cli(
