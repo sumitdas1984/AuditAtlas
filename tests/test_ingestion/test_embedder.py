@@ -1,13 +1,3 @@
-import pytest
-from src.ingestion.embedder.embedder import Embedder
-
-
-@pytest.fixture
-def embedder():
-    """Create an embedder instance."""
-    return Embedder()
-
-
 def test_embed_returns_list_of_floats(embedder):
     """Test that embed returns a list of floats."""
     result = embedder.embed("Test text")

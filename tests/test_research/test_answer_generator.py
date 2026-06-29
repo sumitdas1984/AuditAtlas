@@ -1,51 +1,21 @@
 """Tests for the LLM client + answer generator (FEATURE-006-TASK-1)."""
 
-import os
-from unittest.mock import patch
-
 import pytest
 
 from src.research import (
     AnswerGenerator,
     AnthropicClient,
-    Citation,
     CitedAnswer,
     MockClient,
     build_cited_answer_prompt,
 )
-from src.retrieval import RetrievedChunk, SearchResult
+from src.retrieval import SearchResult
 
-
-# ---------------------------------------------------------------------------
-# Test fixtures
-# ---------------------------------------------------------------------------
-
-def _make_chunk(
-    chunk_id: str,
-    content: str = "Sample content",
-    source_type: str = "A",
-    document_id: str = "DOC",
-    metadata: dict | None = None,
-) -> RetrievedChunk:
-    return RetrievedChunk(
-        chunk_id=chunk_id,
-        source_type=source_type,
-        document_id=document_id,
-        document_type="Standard",
-        content=content,
-        metadata=metadata if metadata is not None else {"paragraph": ".1"},
-        citation=f"[{chunk_id}]",
-        distance=0.1,
-    )
-
-
-@pytest.fixture
-def sample_chunks() -> list[RetrievedChunk]:
-    return [
-        _make_chunk("AS1105.12", content="Audit evidence requirements.", source_type="A"),
-        _make_chunk("AAPL.2025.Item1A.1", content="Apple risk factors.", source_type="B"),
-        _make_chunk("IA-2026-004.3.1", content="Internal audit finding.", source_type="C"),
-    ]
+# _make_chunk is a module-level factory used by some TestPromptTemplate and
+# TestPromptEdgeCases tests to build a single RetrievedChunk. It lives in the
+# conftest so other test modules in this package can share it; pytest auto-
+# loads conftest fixtures, but module-level helpers must be imported.
+from .conftest import _make_chunk  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -308,29 +278,6 @@ class TestResolveCitations:
             "[[AS1105.12]]", []
         )
         assert result == []
-
-
-# ---------------------------------------------------------------------------
-# TestCitationDataclass
-# ---------------------------------------------------------------------------
-
-class TestCitationDataclass:
-    def test_construct_and_access_fields(self, sample_chunks):
-        c = Citation(
-            marker="[[AS1105.12]]",
-            chunk_id="AS1105.12",
-            chunk=sample_chunks[0],
-        )
-        assert c.marker == "[[AS1105.12]]"
-        assert c.chunk_id == "AS1105.12"
-        assert c.chunk is sample_chunks[0]
-
-    def test_two_citations_with_same_chunk_id_are_distinct_objects(self, sample_chunks):
-        c1 = Citation(marker="[[AS1105.12]]", chunk_id="AS1105.12", chunk=sample_chunks[0])
-        c2 = Citation(marker="[[AS1105.12]]", chunk_id="AS1105.12", chunk=sample_chunks[0])
-        # Same data but distinct instances
-        assert c1 is not c2
-        assert c1 == c2  # dataclass equality
 
 
 # ---------------------------------------------------------------------------

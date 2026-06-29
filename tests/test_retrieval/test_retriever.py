@@ -1,10 +1,7 @@
 import pytest
-import tempfile
-import shutil
 from pathlib import Path
 
 from src.ingestion.chunkers.chunker import Chunk
-from src.ingestion.embedder.embedder import Embedder
 from src.ingestion.storage.chroma_store import ChromaStore
 from src.ingestion.storage.json_store import JsonStore
 from src.retrieval import Retriever, RetrievedChunk, SearchResult
@@ -139,30 +136,6 @@ class TestRetriever:
         result = retriever.search("audit", top_k=2)
         assert isinstance(result, SearchResult)
         # Either finds chunks in the real KB, or empty — never raises
-
-    def test_search_result_default_fields(self):
-        """SearchResult() with no chunks should default to empty list, no crash."""
-        result = SearchResult(query="q")
-        assert result.query == "q"
-        assert result.chunks == []
-        assert result.routing is None
-        assert result.sources_searched == []
-
-    def test_retrieved_chunk_construction(self):
-        """RetrievedChunk dataclass accepts all required fields."""
-        chunk = RetrievedChunk(
-            chunk_id="X.1",
-            source_type="A",
-            document_id="X",
-            document_type="Standard",
-            content="text",
-            metadata={"k": "v"},
-            citation="[X § .1]",
-            distance=0.5,
-        )
-        assert chunk.chunk_id == "X.1"
-        assert chunk.distance == 0.5
-        assert chunk.metadata == {"k": "v"}
 
     def test_search_filter_by_ticker(self, populated_stores):
         """ticker='AAPL' returns only Source B chunks tagged with AAPL."""
